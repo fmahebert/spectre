@@ -27,6 +27,7 @@ add_subdirectory(Time)
 add_subdirectory(Utilities)
 
 set(SPECTRE_TESTS "${SPECTRE_TESTS};Test_TestHelpers.cpp")
+set(SPECTRE_TESTS "${SPECTRE_TESTS};Test_Halp.cpp")
 
 add_charm_module(${executable})
 
