@@ -4,6 +4,7 @@
 set(LIBRARY NewtonianEulerLimiters)
 
 set(LIBRARY_SOURCES
+  CharacteristicHelpers.cpp
   Minmod.cpp
   Weno.cpp
   )
