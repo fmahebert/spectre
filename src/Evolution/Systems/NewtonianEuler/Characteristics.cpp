@@ -57,6 +57,7 @@ Matrix right_eigenvectors<1>(const tnsr::I<double, 1>& velocity,
   ASSERT(equal_within_roundoff(get(magnitude(unit_normal)), 1.),
          "Expected unit normal, but got normal with magnitude "
              << get(magnitude(unit_normal)));
+  ASSERT(get(sound_speed_squared) > 0., "c2 = " << get(sound_speed_squared));
 
   const double u = get<0>(velocity);
   const double n_x = get<0>(unit_normal);
@@ -86,6 +87,7 @@ Matrix right_eigenvectors<2>(const tnsr::I<double, 2>& velocity,
   ASSERT(equal_within_roundoff(get(magnitude(unit_normal)), 1.),
          "Expected unit normal, but got normal with magnitude "
              << get(magnitude(unit_normal)));
+  ASSERT(get(sound_speed_squared) > 0., "c2 = " << get(sound_speed_squared));
 
   const double u = get<0>(velocity);
   const double v = get<1>(velocity);
@@ -124,6 +126,7 @@ Matrix right_eigenvectors<3>(const tnsr::I<double, 3>& velocity,
   ASSERT(equal_within_roundoff(get(magnitude(unit_normal)), 1.),
          "Expected unit normal, but got normal with magnitude "
              << get(magnitude(unit_normal)));
+  ASSERT(get(sound_speed_squared) > 0., "c2 = " << get(sound_speed_squared));
 
   const double u = get<0>(velocity);
   const double v = get<1>(velocity);
@@ -210,6 +213,7 @@ Matrix left_eigenvectors<1>(const tnsr::I<double, 1>& velocity,
   ASSERT(equal_within_roundoff(get(magnitude(unit_normal)), 1.),
          "Expected unit normal, but got normal with magnitude "
              << get(magnitude(unit_normal)));
+  ASSERT(get(sound_speed_squared) > 0., "c2 = " << get(sound_speed_squared));
 
   const double velocity_squared = get(dot_product(velocity, velocity));
   const double u = get<0>(velocity);
@@ -247,6 +251,7 @@ Matrix left_eigenvectors<2>(const tnsr::I<double, 2>& velocity,
   ASSERT(equal_within_roundoff(get(magnitude(unit_normal)), 1.),
          "Expected unit normal, but got normal with magnitude "
              << get(magnitude(unit_normal)));
+  ASSERT(get(sound_speed_squared) > 0., "c2 = " << get(sound_speed_squared));
 
   const double velocity_squared = get(dot_product(velocity, velocity));
   const double u = get<0>(velocity);
@@ -295,6 +300,7 @@ Matrix left_eigenvectors<3>(const tnsr::I<double, 3>& velocity,
   ASSERT(equal_within_roundoff(get(magnitude(unit_normal)), 1.),
          "Expected unit normal, but got normal with magnitude "
              << get(magnitude(unit_normal)));
+  ASSERT(get(sound_speed_squared) > 0., "c2 = " << get(sound_speed_squared));
 
   const double velocity_squared = get(dot_product(velocity, velocity));
   const double u = get<0>(velocity);
@@ -345,6 +351,7 @@ Matrix left_eigenvectors<3>(const tnsr::I<double, 3>& velocity,
                       return fabs(n1) < fabs(n2);
                     }));
   if (index_of_largest == 0) {
+    ASSERT(fabs(n_x) > 0.5, "oops");
     // left eigenvectors with 1/n_x terms
     result(2, 0) = (n_y * v_n - v) / n_x;
     result(2, 1) = -n_y;
@@ -357,6 +364,7 @@ Matrix left_eigenvectors<3>(const tnsr::I<double, 3>& velocity,
     result(3, 3) = n_x + square(n_y) / n_x;
     result(3, 4) = 0.;
   } else if (index_of_largest == 1) {
+    ASSERT(fabs(n_y) > 0.5, "oops");
     // left eigenvectors with 1/n_y terms
     result(2, 0) = (u - n_x * v_n) / n_y;
     result(2, 1) = (-1. + square(n_x)) / n_y;
@@ -369,6 +377,7 @@ Matrix left_eigenvectors<3>(const tnsr::I<double, 3>& velocity,
     result(3, 3) = n_y + square(n_x) / n_y;
     result(3, 4) = 0.;
   } else {
+    ASSERT(fabs(n_z) > 0.5, "oops");
     // left eigenvectors with 1/n_z terms
     result(2, 0) = (u - n_x * v_n) / n_z;
     result(2, 1) = (-1. + square(n_x)) / n_z;
