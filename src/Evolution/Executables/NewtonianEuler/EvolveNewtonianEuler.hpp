@@ -24,10 +24,13 @@
 #include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
 #include "Evolution/Initialization/Limiter.hpp"
+#include "Evolution/Systems/NewtonianEuler/FixToAtmosphere.hpp"
 #include "Evolution/Systems/NewtonianEuler/SoundSpeedSquared.hpp"
 #include "Evolution/Systems/NewtonianEuler/Sources/NoSource.hpp"
 #include "Evolution/Systems/NewtonianEuler/System.hpp"
 #include "Evolution/Systems/NewtonianEuler/Tags.hpp"
+#include "Evolution/VariableFixing/Actions.hpp"
+#include "Evolution/VariableFixing/Tags.hpp"
 #include "IO/Observer/Actions.hpp"
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
@@ -214,6 +217,9 @@ struct EvolutionMetavars {
       dg::Actions::InitializeDomain<Dim>,
       Initialization::Actions::ConservativeSystem,
       Initialization::Actions::TimeStepperHistory<EvolutionMetavars>,
+      VariableFixing::Actions::FixVariables<
+          VariableFixing::NewtonianEuler::FixToAtmosphere<
+              volume_dim, equation_of_state_type::thermodynamic_dim>>,
       Initialization::Actions::AddComputeTags<
           tmpl::list<NewtonianEuler::Tags::SoundSpeedSquaredCompute<DataVector>,
                      NewtonianEuler::Tags::SoundSpeedCompute<DataVector>>>,
@@ -261,6 +267,10 @@ struct EvolutionMetavars {
               Parallel::PhaseActions<
                   Phase, Phase::Evolve,
                   tmpl::list<
+                      VariableFixing::Actions::FixVariables<
+                          VariableFixing::NewtonianEuler::FixToAtmosphere<
+                              volume_dim,
+                              equation_of_state_type::thermodynamic_dim>>,
                       Actions::UpdateConservatives,
                       Actions::RunEventsAndTriggers,
                       Actions::ChangeSlabSize,
