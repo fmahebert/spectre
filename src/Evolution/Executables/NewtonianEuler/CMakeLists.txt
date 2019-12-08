@@ -20,6 +20,7 @@ set(LIBS_TO_LINK
   Options
   Time
   Utilities
+  VariableFixing
   )
 
 function(add_newtonian_euler_executable EXECUTABLE_NAME DIM INITIAL_DATA)
