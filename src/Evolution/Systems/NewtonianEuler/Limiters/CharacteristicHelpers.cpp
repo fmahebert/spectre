@@ -39,6 +39,7 @@ std::pair<Matrix, Matrix> compute_eigenvectors(
     const EquationsOfState::EquationOfState<false, ThermodynamicDim>&
         equation_of_state,
     const tnsr::i<double, VolumeDim>& unit_normal) noexcept {
+  ASSERT(get(mean_density) > 0., "oops");
   // Prims from means
   const auto velocity = [&mean_density, &mean_momentum]() noexcept {
     auto result = mean_momentum;
@@ -63,6 +64,7 @@ std::pair<Matrix, Matrix> compute_eigenvectors(
        &kappa_over_density](const EquationsOfState::EquationOfState<false, 1>&
                                 the_equation_of_state) noexcept {
         pressure = the_equation_of_state.pressure_from_density(mean_density);
+        ASSERT(get(pressure) > 0., "oops");
         get(kappa_over_density) =
             get(the_equation_of_state
                     .kappa_times_p_over_rho_squared_from_density(
@@ -74,6 +76,7 @@ std::pair<Matrix, Matrix> compute_eigenvectors(
                                 the_equation_of_state) noexcept {
         pressure = the_equation_of_state.pressure_from_density_and_energy(
             mean_density, specific_internal_energy);
+        ASSERT(get(pressure) > 0., "oops");
         get(kappa_over_density) =
             get(the_equation_of_state
                     .kappa_times_p_over_rho_squared_from_density_and_energy(
