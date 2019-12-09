@@ -43,7 +43,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Formulation.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/Hll.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
@@ -135,7 +135,7 @@ struct EvolutionMetavars {
       not cpp17::is_same_v<source_term_type, NewtonianEuler::Sources::NoSource>;
 
   using normal_dot_numerical_flux =
-      Tags::NumericalFlux<dg::NumericalFluxes::Hll<system>>;
+      Tags::NumericalFlux<dg::NumericalFluxes::LocalLaxFriedrichs<system>>;
 
   using limiter = Tags::Limiter<Limiters::Minmod<
       Dim,
