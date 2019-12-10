@@ -9,6 +9,7 @@ set(LIBRARY_SOURCES
   FixConsMeansToAtmosphere.cpp
   FixToAtmosphere.cpp
   Fluxes.cpp
+  PostLimiterFlattening.cpp
   PrimitiveFromConservative.cpp
   SoundSpeedSquared.cpp
   )
