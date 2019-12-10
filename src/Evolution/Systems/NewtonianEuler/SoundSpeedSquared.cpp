@@ -15,6 +15,38 @@
 
 // IWYU pragma: no_forward_declare EquationsOfState::EquationOfState
 
+namespace {
+void assertion_helper(const Scalar<double>& mass_density,
+                      const Scalar<double>& specific_internal_energy,
+                      const Scalar<double>& sound_speed_squared) noexcept {
+  ASSERT(get(sound_speed_squared) >= 0.,
+         "oops.\n"
+         "rho = "
+             << get(mass_density)
+             << "\n"
+                "eps = "
+             << get(specific_internal_energy)
+             << "\n"
+                "c2 = "
+             << get(sound_speed_squared));
+}
+
+void assertion_helper(const Scalar<DataVector>& mass_density,
+                      const Scalar<DataVector>& specific_internal_energy,
+                      const Scalar<DataVector>& sound_speed_squared) noexcept {
+  ASSERT(min(get(sound_speed_squared)) >= 0.,
+         "oops.\n"
+         "rho = "
+             << get(mass_density)
+             << "\n"
+                "eps = "
+             << get(specific_internal_energy)
+             << "\n"
+                "c2 = "
+             << get(sound_speed_squared));
+}
+}  // namespace
+
 /// \cond
 namespace NewtonianEuler {
 
@@ -45,6 +77,7 @@ void sound_speed_squared(
                     .kappa_times_p_over_rho_squared_from_density_and_energy(
                         mass_density, specific_internal_energy));
       })(equation_of_state);
+  assertion_helper(mass_density, specific_internal_energy, *result);
 }
 
 template <typename DataType, size_t ThermodynamicDim>
