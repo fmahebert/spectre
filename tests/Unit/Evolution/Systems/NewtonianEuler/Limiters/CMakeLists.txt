@@ -4,6 +4,7 @@
 set(LIBRARY "Test_NewtonianEulerLimiters")
 
 set(LIBRARY_SOURCES
+  Test_Flattener.cpp
   Test_Minmod.cpp
   Test_Weno.cpp
   )
