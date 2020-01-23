@@ -6,6 +6,7 @@ set(LIBRARY NewtonianEuler)
 set(LIBRARY_SOURCES
   Characteristics.cpp
   ConservativeFromPrimitive.cpp
+  FixConsMeansToAtmosphere.cpp
   FixToAtmosphere.cpp
   Fluxes.cpp
   PrimitiveFromConservative.cpp
