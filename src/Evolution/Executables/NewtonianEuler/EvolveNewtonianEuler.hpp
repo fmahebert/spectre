@@ -24,6 +24,7 @@
 #include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
 #include "Evolution/Initialization/Limiter.hpp"
+#include "Evolution/Systems/NewtonianEuler/FixConsMeansToAtmosphere.hpp"
 #include "Evolution/Systems/NewtonianEuler/FixToAtmosphere.hpp"
 #include "Evolution/Systems/NewtonianEuler/SoundSpeedSquared.hpp"
 #include "Evolution/Systems/NewtonianEuler/Sources/NoSource.hpp"
@@ -198,7 +199,11 @@ struct EvolutionMetavars {
       tmpl::conditional_t<local_time_stepping,
                           dg::Actions::ApplyBoundaryFluxesLocalTimeStepping,
                           tmpl::list<>>,
-      Actions::UpdateU<>, Limiters::Actions::SendData<EvolutionMetavars>,
+      Actions::UpdateU<>,
+      VariableFixing::Actions::FixVariables<
+          VariableFixing::NewtonianEuler::FixConsMeansToAtmosphere<
+              volume_dim, equation_of_state_type::thermodynamic_dim>>,
+      Limiters::Actions::SendData<EvolutionMetavars>,
       Limiters::Actions::Limit<EvolutionMetavars>,
       // Conservative `UpdatePrimitives` expects system to possess
       // list of recovery schemes so we use `MutateApply` instead.
