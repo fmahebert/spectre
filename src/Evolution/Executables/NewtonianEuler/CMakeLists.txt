@@ -13,6 +13,7 @@ set(LIBS_TO_LINK
   LinearOperators
   MathFunctions
   NewtonianEuler
+  NewtonianEulerLimiters
   NewtonianEulerNumericalFluxes
   NewtonianEulerSolutions
   NewtonianEulerSources
