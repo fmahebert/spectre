@@ -12,4 +12,6 @@ struct SomeType {};
 
 SPECTRE_TEST_CASE("Unit.Evolution.DG.Limiters.Tags", "[Unit][Evolution]") {
   TestHelpers::db::test_simple_tag<Tags::Limiter<SomeType>>("Limiter");
+  TestHelpers::db::test_simple_tag<Tags::LimiterDiagnostics>(
+      "LimiterDiagnostics");
 }
