@@ -33,19 +33,24 @@ NumericalFlux:
   Hll:
 
 Limiter:
-  Minmod:
-    # Uncomment line below to turn off the limiter:
-    # DisableForDebugging: True
-    Type: LambdaPiN
-    # Recommended value from minmod papers:
-    TvbConstant: 50.0
+  Weno:
+    Type: CharacteristicHweno
+    NeighborWeight: 0.001
+    # For simplicity of coding for now... specify both of these constants, even
+    # though only ONE of them is used by the code at a time, depending on the
+    # "Type" option above:
+    # - controls MinmodTci in cons-var {Simple,H}Weno and char-var SimpleWeno
+    TvbConstant: 0.0
+    # - controls KxrcfTci in char-var Hweno
+    KxrcfConstant: 0.0
+    ApplyFlattener: true
 
 EventsAndTriggers:
   # ? EveryNSlabs:
   #     N: 100
   #     Offset: 0
   # : - ObserveFields:
-  #       VariablesToObserve: [MassDensity]
+  #       VariablesToObserve: [MassDensity, LimiterDiagnostics]
   # ? PastTime: 0.7501
   ? SpecifiedSlabs:
       Slabs: [10]
