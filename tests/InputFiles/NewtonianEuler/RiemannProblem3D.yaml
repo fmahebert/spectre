@@ -33,19 +33,17 @@ NumericalFlux:
   Hll:
 
 Limiter:
-  Minmod:
-    # Uncomment line below to turn off the limiter:
-    # DisableForDebugging: True
-    Type: LambdaPiN
-    # Recommended value from minmod papers:
-    TvbConstant: 50.0
+  Weno:
+    Type: Hweno
+    NeighborWeight: 0.001
+    TvbConstant: 0.0
 
 EventsAndTriggers:
   # ? EveryNSlabs:
   #     N: 100
   #     Offset: 0
   # : - ObserveFields:
-  #       VariablesToObserve: [MassDensity]
+  #       VariablesToObserve: [MassDensity, LimiterDiagnostics]
   # ? PastTime: 0.7501
   ? SpecifiedSlabs:
       Slabs: [10]
