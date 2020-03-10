@@ -27,6 +27,7 @@
 #include "Evolution/Systems/NewtonianEuler/FixConsMeansToAtmosphere.hpp"
 #include "Evolution/Systems/NewtonianEuler/FixToAtmosphere.hpp"
 #include "Evolution/Systems/NewtonianEuler/PostLimiterFlattening.hpp"
+#include "Evolution/Systems/NewtonianEuler/PostLimiterPpFlux.hpp"
 #include "Evolution/Systems/NewtonianEuler/SoundSpeedSquared.hpp"
 #include "Evolution/Systems/NewtonianEuler/Sources/NoSource.hpp"
 #include "Evolution/Systems/NewtonianEuler/System.hpp"
@@ -209,6 +210,8 @@ struct EvolutionMetavars {
       VariableFixing::Actions::FixVariables<
           VariableFixing::NewtonianEuler::PostLimiterFlattening<
               volume_dim, equation_of_state_type::thermodynamic_dim>>,
+      VariableFixing::Actions::FixVariables<
+          VariableFixing::NewtonianEuler::PostLimiterPpFlux<volume_dim>>,
       // Conservative `UpdatePrimitives` expects system to possess
       // list of recovery schemes so we use `MutateApply` instead.
       Actions::MutateApply<typename system::primitive_from_conservative>>>;
