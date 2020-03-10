@@ -10,6 +10,7 @@ set(LIBRARY_SOURCES
   FixToAtmosphere.cpp
   Fluxes.cpp
   PostLimiterFlattening.cpp
+  PostLimiterPpFlux.cpp
   PrimitiveFromConservative.cpp
   SoundSpeedSquared.cpp
   )
