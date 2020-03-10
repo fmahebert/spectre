@@ -32,6 +32,7 @@
 #include "Evolution/Systems/NewtonianEuler/Limiters/Weno.hpp"
 #include "Evolution/Systems/NewtonianEuler/NumericalFluxes/MaxNormalFluxes.hpp"
 #include "Evolution/Systems/NewtonianEuler/NumericalFluxes/PositivityPreservingLaxFriedrichs.hpp"
+#include "Evolution/Systems/NewtonianEuler/PostLimiterPpFlux.hpp"
 #include "Evolution/Systems/NewtonianEuler/SoundSpeedSquared.hpp"
 #include "Evolution/Systems/NewtonianEuler/Sources/NoSource.hpp"
 #include "Evolution/Systems/NewtonianEuler/System.hpp"
@@ -221,6 +222,8 @@ struct EvolutionMetavars {
                                      Actions::RecordTimeStepperData<>>>,
       Actions::UpdateU<>, Limiters::Actions::SendData<EvolutionMetavars>,
       Limiters::Actions::Limit<EvolutionMetavars>,
+      VariableFixing::Actions::FixVariables<
+          VariableFixing::NewtonianEuler::PostLimiterPpFlux<volume_dim>>,
       // Conservative `UpdatePrimitives` expects system to possess
       // list of recovery schemes so we use `MutateApply` instead.
       Actions::MutateApply<typename system::primitive_from_conservative>>>;
