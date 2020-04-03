@@ -5,6 +5,7 @@ set(LIBRARY "Test_NewtonianEulerLimiters")
 
 set(LIBRARY_SOURCES
   Test_Minmod.cpp
+  Test_Weno.cpp
   )
 
 add_test_library(
