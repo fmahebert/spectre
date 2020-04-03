@@ -5,6 +5,7 @@ set(LIBRARY NewtonianEulerLimiters)
 
 set(LIBRARY_SOURCES
   Minmod.cpp
+  Weno.cpp
   )
 
 add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
@@ -16,6 +17,7 @@ target_link_libraries(
   DataStructures
   Domain
   ErrorHandling
+  Limiters
   NewtonianEuler
   Utilities
   )
