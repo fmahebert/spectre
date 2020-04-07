@@ -7,6 +7,7 @@ set(LIBRARY_SOURCES
   CharacteristicHelpers.cpp
   Minmod.cpp
   Weno.cpp
+  WenoType.cpp
   )
 
 add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})

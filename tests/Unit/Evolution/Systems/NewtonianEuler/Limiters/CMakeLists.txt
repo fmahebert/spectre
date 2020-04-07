@@ -8,6 +8,7 @@ set(LIBRARY_SOURCES
   Test_Flattener.cpp
   Test_Minmod.cpp
   Test_Weno.cpp
+  Test_WenoType.cpp
   )
 
 add_test_library(
