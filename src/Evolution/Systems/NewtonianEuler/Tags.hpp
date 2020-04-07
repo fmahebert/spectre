@@ -21,12 +21,6 @@ namespace NewtonianEuler {
 /// %Tags for the conservative formulation of the Newtonian Euler system
 namespace Tags {
 
-/// The characteristic speeds.
-template <size_t Dim>
-struct CharacteristicSpeeds : db::SimpleTag {
-  using type = std::array<DataVector, Dim + 2>;
-};
-
 /// The mass density of the fluid.
 template <typename DataType>
 struct MassDensity : db::SimpleTag {
@@ -83,6 +77,24 @@ struct SoundSpeed : db::SimpleTag {
 template <typename DataType>
 struct SoundSpeedSquared : db::SimpleTag {
   using type = Scalar<DataType>;
+};
+
+/// The characteristic speeds.
+template <size_t Dim>
+struct CharacteristicSpeeds : db::SimpleTag {
+  using type = std::array<DataVector, Dim + 2>;
+};
+
+/// The characteristic fields.
+struct UMinus : db::SimpleTag {
+  using type = Scalar<DataVector>;
+};
+template <size_t Dim>
+struct U0 : db::SimpleTag {
+  using type = tnsr::I<DataVector, Dim>;
+};
+struct UPlus : db::SimpleTag {
+  using type = Scalar<DataVector>;
 };
 
 /// Base tag for the source term
