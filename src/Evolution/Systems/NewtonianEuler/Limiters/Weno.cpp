@@ -19,16 +19,32 @@
 #include "Evolution/DiscontinuousGalerkin/Limiters/Weno.hpp"
 #include "Evolution/DiscontinuousGalerkin/Limiters/WenoType.hpp"
 #include "Evolution/Systems/NewtonianEuler/Limiters/Flattener.hpp"
+#include "Evolution/Systems/NewtonianEuler/Limiters/WenoType.hpp"
 #include "Evolution/Systems/NewtonianEuler/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/MeanValue.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/Gsl.hpp"
 
+namespace {
+Limiters::WenoType weno_type_from_newtonian_euler_weno_type(
+    const NewtonianEuler::Limiters::WenoType in) noexcept {
+  switch (in) {
+    case NewtonianEuler::Limiters::WenoType::ConservativeHweno:
+      return Limiters::WenoType::Hweno;
+    case NewtonianEuler::Limiters::WenoType::ConservativeSimpleWeno:
+      return Limiters::WenoType::SimpleWeno;
+    default:
+      // TODO(FH) clean this up... need an uninitialized value maybe?
+      ERROR("bad newtonian euler weno type");
+  }
+}
+}  // namespace
+
 namespace NewtonianEuler {
 namespace Limiters {
 
 template <size_t VolumeDim>
-Weno<VolumeDim>::Weno(const ::Limiters::WenoType weno_type,
+Weno<VolumeDim>::Weno(const WenoType weno_type,
                       const double neighbor_linear_weight,
                       const double tvb_constant, const bool apply_flattener,
                       const bool disable_for_debugging) noexcept
@@ -58,7 +74,10 @@ void Weno<VolumeDim>::package_data(
     const Scalar<DataVector>& energy_density, const Mesh<VolumeDim>& mesh,
     const std::array<double, VolumeDim>& element_size,
     const OrientationMap<VolumeDim>& orientation_map) const noexcept {
-  const ConservativeVarsWeno weno(weno_type_, neighbor_linear_weight_,
+  // Convert NewtonianEuler::Limiters::WenoType -> Limiters::WenoType
+  const ::Limiters::WenoType generic_weno_type =
+      weno_type_from_newtonian_euler_weno_type(weno_type_);
+  const ConservativeVarsWeno weno(generic_weno_type, neighbor_linear_weight_,
                                   tvb_constant_, disable_for_debugging_);
   weno.package_data(packaged_data, mass_density_cons, momentum_density,
                     energy_density, mesh, element_size, orientation_map);
@@ -114,7 +133,10 @@ bool Weno<VolumeDim>::operator()(
   }
   // End pre-limiter checks
 
-  const ConservativeVarsWeno weno(weno_type_, neighbor_linear_weight_,
+  // Convert NewtonianEuler::Limiters::WenoType -> Limiters::WenoType
+  const ::Limiters::WenoType generic_weno_type =
+      weno_type_from_newtonian_euler_weno_type(weno_type_);
+  const ConservativeVarsWeno weno(generic_weno_type, neighbor_linear_weight_,
                                   tvb_constant_, disable_for_debugging_);
   const bool limiter_activated =
       weno(mass_density_cons, momentum_density, energy_density, mesh, element,

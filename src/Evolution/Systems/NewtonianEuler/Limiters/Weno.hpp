@@ -16,7 +16,7 @@
 #include "Domain/Tags.hpp"  // IWYU pragma: keep
 #include "Evolution/DiscontinuousGalerkin/Limiters/Tags.hpp"
 #include "Evolution/DiscontinuousGalerkin/Limiters/Weno.hpp"
-#include "Evolution/DiscontinuousGalerkin/Limiters/WenoType.hpp"
+#include "Evolution/Systems/NewtonianEuler/Limiters/WenoType.hpp"
 #include "Evolution/Systems/NewtonianEuler/Tags.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
@@ -46,22 +46,25 @@ class Weno {
                             NewtonianEuler::Tags::MomentumDensity<VolumeDim>,
                             NewtonianEuler::Tags::EnergyDensity>>;
 
+  struct Type {
+    using type = WenoType;
+    static constexpr OptionString help = {
+        "Type of NewtonianEuler-specialized WENO limiter"};
+  };
   struct ApplyFlattener {
     using type = bool;
     static constexpr OptionString help = {
         "Flatten after limiting to restore pointwise positivity"};
   };
   using options =
-      tmpl::list<typename ConservativeVarsWeno::Type,
-                 typename ConservativeVarsWeno::NeighborWeight,
+      tmpl::list<Type, typename ConservativeVarsWeno::NeighborWeight,
                  typename ConservativeVarsWeno::TvbConstant, ApplyFlattener,
                  typename ConservativeVarsWeno::DisableForDebugging>;
   static constexpr OptionString help = {
       "A WENO limiter specialized to the NewtonianEuler system"};
 
-  Weno(::Limiters::WenoType weno_type, double neighbor_linear_weight,
-       double tvb_constant, bool apply_flattener,
-       bool disable_for_debugging = false) noexcept;
+  Weno(WenoType weno_type, double neighbor_linear_weight, double tvb_constant,
+       bool apply_flattener, bool disable_for_debugging = false) noexcept;
 
   Weno() noexcept = default;
   Weno(const Weno& /*rhs*/) = default;
@@ -119,7 +122,7 @@ class Weno {
   friend bool operator==(const Weno<LocalDim>& lhs,
                          const Weno<LocalDim>& rhs) noexcept;
 
-  ::Limiters::WenoType weno_type_;
+  WenoType weno_type_;
   double neighbor_linear_weight_;
   double tvb_constant_;
   bool apply_flattener_;
