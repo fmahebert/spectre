@@ -69,14 +69,20 @@ class Minmod {
                             NewtonianEuler::Tags::MomentumDensity<VolumeDim>,
                             NewtonianEuler::Tags::EnergyDensity>>;
 
+  struct ApplyFlattener {
+    using type = bool;
+    static constexpr OptionString help = {
+        "Flatten after limiting to restore pointwise positivity"};
+  };
   using options =
       tmpl::list<typename ConservativeVarsMinmod::Type,
-                 typename ConservativeVarsMinmod::TvbConstant,
+                 typename ConservativeVarsMinmod::TvbConstant, ApplyFlattener,
                  typename ConservativeVarsMinmod::DisableForDebugging>;
   static constexpr OptionString help = {
       "A Minmod limiter specialized to the NewtonianEuler system"};
 
-  explicit Minmod(::Limiters::MinmodType minmod_type, double tvb_constant = 0.0,
+  explicit Minmod(::Limiters::MinmodType minmod_type, double tvb_constant,
+                  bool apply_flattener,
                   bool disable_for_debugging = false) noexcept;
 
   Minmod() noexcept = default;
@@ -140,6 +146,7 @@ class Minmod {
 
   ::Limiters::MinmodType minmod_type_;
   double tvb_constant_;
+  bool apply_flattener_;
   bool disable_for_debugging_;
 };
 
