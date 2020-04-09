@@ -46,16 +46,22 @@ class Weno {
                             NewtonianEuler::Tags::MomentumDensity<VolumeDim>,
                             NewtonianEuler::Tags::EnergyDensity>>;
 
+  struct ApplyFlattener {
+    using type = bool;
+    static constexpr OptionString help = {
+        "Flatten after limiting to restore pointwise positivity"};
+  };
   using options =
       tmpl::list<typename ConservativeVarsWeno::Type,
                  typename ConservativeVarsWeno::NeighborWeight,
-                 typename ConservativeVarsWeno::TvbConstant,
+                 typename ConservativeVarsWeno::TvbConstant, ApplyFlattener,
                  typename ConservativeVarsWeno::DisableForDebugging>;
   static constexpr OptionString help = {
       "A WENO limiter specialized to the NewtonianEuler system"};
 
   Weno(::Limiters::WenoType weno_type, double neighbor_linear_weight,
-       double tvb_constant, bool disable_for_debugging = false) noexcept;
+       double tvb_constant, bool apply_flattener,
+       bool disable_for_debugging = false) noexcept;
 
   Weno() noexcept = default;
   Weno(const Weno& /*rhs*/) = default;
@@ -116,6 +122,7 @@ class Weno {
   ::Limiters::WenoType weno_type_;
   double neighbor_linear_weight_;
   double tvb_constant_;
+  bool apply_flattener_;
   bool disable_for_debugging_;
 };
 

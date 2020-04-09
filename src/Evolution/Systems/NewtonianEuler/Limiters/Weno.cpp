@@ -18,6 +18,7 @@
 #include "ErrorHandling/Assert.hpp"
 #include "Evolution/DiscontinuousGalerkin/Limiters/Weno.hpp"
 #include "Evolution/DiscontinuousGalerkin/Limiters/WenoType.hpp"
+#include "Evolution/Systems/NewtonianEuler/Limiters/Flattener.hpp"
 #include "Evolution/Systems/NewtonianEuler/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/MeanValue.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
@@ -29,11 +30,12 @@ namespace Limiters {
 template <size_t VolumeDim>
 Weno<VolumeDim>::Weno(const ::Limiters::WenoType weno_type,
                       const double neighbor_linear_weight,
-                      const double tvb_constant,
+                      const double tvb_constant, const bool apply_flattener,
                       const bool disable_for_debugging) noexcept
     : weno_type_(weno_type),
       neighbor_linear_weight_(neighbor_linear_weight),
       tvb_constant_(tvb_constant),
+      apply_flattener_(apply_flattener),
       disable_for_debugging_(disable_for_debugging) {
   ASSERT(tvb_constant >= 0.0, "The TVB constant must be non-negative.");
 }
@@ -44,6 +46,7 @@ void Weno<VolumeDim>::pup(PUP::er& p) noexcept {
   p | weno_type_;
   p | neighbor_linear_weight_;
   p | tvb_constant_;
+  p | apply_flattener_;
   p | disable_for_debugging_;
 }
 
@@ -117,6 +120,13 @@ bool Weno<VolumeDim>::operator()(
       weno(mass_density_cons, momentum_density, energy_density, mesh, element,
            element_size, neighbor_data);
 
+  size_t flattener_status = 0;
+  if (apply_flattener_) {
+    flattener_status =
+        flatten_solution(mass_density_cons, momentum_density, energy_density,
+                         mesh, equation_of_state);
+  }
+
   // Checks for the post-limiter NewtonianEuler state, e.g.:
   ASSERT(min(get(*mass_density_cons)) > 0.0, "Bad density after limiting.");
   if (ThermodynamicDim == 2) {
@@ -143,7 +153,8 @@ bool Weno<VolumeDim>::operator()(
   }
   // End post-limiter checks
 
-  get(*limiter_diagnostics) = (limiter_activated ? 1.0 : 0.0);
+  get(*limiter_diagnostics) =
+      (limiter_activated ? 1.0 : 0.0) + (flattener_status > 0 ? 1.0 : 0.0);
   return limiter_activated;
 }
 
@@ -152,6 +163,7 @@ bool operator==(const Weno<LocalDim>& lhs, const Weno<LocalDim>& rhs) noexcept {
   return lhs.weno_type_ == rhs.weno_type_ and
          lhs.neighbor_linear_weight_ == rhs.neighbor_linear_weight_ and
          lhs.tvb_constant_ == rhs.tvb_constant_ and
+         lhs.apply_flattener_ == rhs.apply_flattener_ and
          lhs.disable_for_debugging_ == rhs.disable_for_debugging_;
 }
 
