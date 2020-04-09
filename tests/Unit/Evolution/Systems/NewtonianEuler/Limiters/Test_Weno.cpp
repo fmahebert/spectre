@@ -133,8 +133,10 @@ void test_limiter_work(const Scalar<DataVector>& input_density,
   auto momentum_specialized = input_momentum;
   auto energy_specialized = input_energy;
   auto diagnostics = make_with_value<Scalar<DataVector>>(input_density, 0.0);
+  const bool apply_flattener = false;
   const NewtonianEuler::Limiters::Weno<VolumeDim> weno_specialized(
-      Limiters::WenoType::SimpleWeno, neighbor_linear_weight, tvb_constant);
+      Limiters::WenoType::SimpleWeno, neighbor_linear_weight, tvb_constant,
+      apply_flattener);
   const bool activated_specialized = weno_specialized(
       make_not_null(&density_specialized), make_not_null(&momentum_specialized),
       make_not_null(&energy_specialized), make_not_null(&diagnostics), mesh,
