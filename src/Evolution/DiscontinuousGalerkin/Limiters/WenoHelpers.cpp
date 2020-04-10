@@ -85,6 +85,15 @@ void reconstruct_from_weighted_sum(
         oscillation_indicator(derivative_weight, neighbor_polynomial, mesh));
   }
 
+  // THE HAMMER
+  // Any neighbor that contributes MORE oscillation (=> a lower weight),
+  // we do not want to contribute to the sum at all. We zero these weights.
+  for (auto& kv : neighbor_weights) {
+    if (kv.second < local_weight) {
+      kv.second = 0.0;
+    }
+  }
+
   // Update `local_weights` and `neighbor_weights` to hold the normalized
   // weights; these are the final weights of the WENO reconstruction.
   double normalization = local_weight;
