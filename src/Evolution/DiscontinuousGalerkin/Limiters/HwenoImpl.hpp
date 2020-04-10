@@ -563,7 +563,7 @@ void hweno_impl(
     // Sum local and modified neighbor polynomials for the WENO reconstruction
     Weno_detail::reconstruct_from_weighted_sum(
         make_not_null(&((*tensor)[tensor_index])), neighbor_linear_weight,
-        Weno_detail::DerivativeWeight::PowTwoEllOverEllFactorial, mesh,
+        Weno_detail::DerivativeWeight::PowTwoEll, mesh,
         *modified_neighbor_solution_buffer);
   }
 }
