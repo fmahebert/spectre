@@ -26,7 +26,7 @@ namespace {
 // choice of weights; see e.g., Eq. 3.9 of Zhong2013 or Eq. 3.6 of Zhu2016.
 inline double unnormalized_nonlinear_weight(
     const double linear_weight, const double oscillation_indicator) noexcept {
-  return linear_weight / square(1.e-6 + oscillation_indicator);
+  return linear_weight / pow<4>(1.e-6 + oscillation_indicator);
 }
 
 }  // namespace
