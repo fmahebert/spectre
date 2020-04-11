@@ -5,6 +5,7 @@ set(LIBRARY "Test_NewtonianEulerNumericalFluxes")
 
 set(LIBRARY_SOURCES
   Test_Hllc.cpp
+  Test_MaxNormalFluxes.cpp
   )
 
 add_test_library(
