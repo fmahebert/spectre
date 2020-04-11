@@ -5,6 +5,7 @@ set(LIBRARY NewtonianEulerNumericalFluxes)
 
 set(LIBRARY_SOURCES
   Hllc.cpp
+  PositivityPreservingLaxFriedrichs.cpp
   )
 
 add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
