@@ -13,9 +13,9 @@ Evolution:
 DomainCreator:
   Brick:
     LowerBound: [-0.25, 0.0, 0.0]
-    UpperBound: [0.75, 0.1, 0.1]
+    UpperBound: [0.75, 1.0, 1.0]
     IsPeriodicIn: [false, false, false]
-    InitialRefinement: [4, 0, 0]
+    InitialRefinement: [2, 2, 2]
     InitialGridPoints: [2, 2, 2]
 
 AnalyticSolution:
@@ -30,7 +30,8 @@ AnalyticSolution:
     RightPressure: 0.1
 
 NumericalFlux:
-  Hll:
+  PositivityPreservingLaxFriedrichs:
+    EnablePpChecks: true
 
 Limiter:
   Weno:

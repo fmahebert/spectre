@@ -29,6 +29,8 @@
 #include "Evolution/Initialization/Limiter.hpp"
 #include "Evolution/Systems/NewtonianEuler/Limiters/Minmod.hpp"
 #include "Evolution/Systems/NewtonianEuler/Limiters/Weno.hpp"
+#include "Evolution/Systems/NewtonianEuler/NumericalFluxes/MaxNormalFluxes.hpp"
+#include "Evolution/Systems/NewtonianEuler/NumericalFluxes/PositivityPreservingLaxFriedrichs.hpp"
 #include "Evolution/Systems/NewtonianEuler/SoundSpeedSquared.hpp"
 #include "Evolution/Systems/NewtonianEuler/Sources/NoSource.hpp"
 #include "Evolution/Systems/NewtonianEuler/System.hpp"
@@ -134,8 +136,8 @@ struct EvolutionMetavars {
   static constexpr bool has_source_terms =
       not std::is_same_v<source_term_type, NewtonianEuler::Sources::NoSource>;
 
-  using normal_dot_numerical_flux =
-      Tags::NumericalFlux<dg::NumericalFluxes::Hll<system>>;
+  using normal_dot_numerical_flux = Tags::NumericalFlux<
+      NewtonianEuler::NumericalFluxes::PositivityPreservingLaxFriedrichs<Dim>>;
 
   using limiter = Tags::Limiter<NewtonianEuler::Limiters::Weno<Dim>>;
 
@@ -233,19 +235,26 @@ struct EvolutionMetavars {
       evolution::dg::Initialization::Domain<Dim>,
       Initialization::Actions::ConservativeSystem,
       Initialization::Actions::TimeStepperHistory<EvolutionMetavars>,
-      Initialization::Actions::AddComputeTags<
-          tmpl::list<NewtonianEuler::Tags::SoundSpeedSquaredCompute<DataVector>,
-                     NewtonianEuler::Tags::SoundSpeedCompute<DataVector>>>,
+      Initialization::Actions::Minmod<Dim>,
+      Initialization::Actions::AddComputeTags<tmpl::list<
+          NewtonianEuler::Tags::SoundSpeedSquaredCompute<DataVector>,
+          NewtonianEuler::Tags::SoundSpeedCompute<DataVector>,
+          NewtonianEuler::Tags::MaxNormalFluxMassDensityCompute<Dim>,
+          NewtonianEuler::Tags::MaxNormalFluxEnergyDensityCompute<Dim>>>,
       Actions::UpdateConservatives,
       dg::Actions::InitializeInterfaces<
           system,
           dg::Initialization::slice_tags_to_face<
               typename system::variables_tag,
               typename system::primitive_variables_tag,
-              NewtonianEuler::Tags::SoundSpeed<DataVector>>,
+              NewtonianEuler::Tags::SoundSpeed<DataVector>,
+              NewtonianEuler::Tags::MaxNormalFluxMassDensity,
+              NewtonianEuler::Tags::MaxNormalFluxEnergyDensity>,
           dg::Initialization::slice_tags_to_exterior<
               typename system::primitive_variables_tag,
-              NewtonianEuler::Tags::SoundSpeed<DataVector>>,
+              NewtonianEuler::Tags::SoundSpeed<DataVector>,
+              NewtonianEuler::Tags::MaxNormalFluxMassDensity,
+              NewtonianEuler::Tags::MaxNormalFluxEnergyDensity>,
           dg::Initialization::face_compute_tags<>,
           dg::Initialization::exterior_compute_tags<>, true, true>,
       tmpl::conditional_t<
@@ -256,7 +265,6 @@ struct EvolutionMetavars {
           tmpl::list<>>,
       dg::Actions::InitializeMortars<boundary_scheme>,
       Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
-      Initialization::Actions::Minmod<Dim>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   using component_list = tmpl::list<
