@@ -23,6 +23,7 @@
 #include "Evolution/DiscontinuousGalerkin/Limiters/WenoType.hpp"
 #include "Evolution/Systems/NewtonianEuler/Limiters/CharacteristicHelpers.hpp"
 #include "Evolution/Systems/NewtonianEuler/Limiters/Flattener.hpp"
+#include "Evolution/Systems/NewtonianEuler/Limiters/KxrcfTci.hpp"
 #include "Evolution/Systems/NewtonianEuler/Limiters/WenoType.hpp"
 #include "Evolution/Systems/NewtonianEuler/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/MeanValue.hpp"
@@ -33,6 +34,8 @@ namespace {
 Limiters::WenoType weno_type_from_newtonian_euler_weno_type(
     const NewtonianEuler::Limiters::WenoType in) noexcept {
   switch (in) {
+    case NewtonianEuler::Limiters::WenoType::CharacteristicHweno:
+      return Limiters::WenoType::Hweno;
     case NewtonianEuler::Limiters::WenoType::CharacteristicSimpleWeno:
       return Limiters::WenoType::SimpleWeno;
     case NewtonianEuler::Limiters::WenoType::ConservativeHweno:
@@ -253,6 +256,167 @@ bool characteristic_simple_weno_impl(
   return some_component_was_limited;
 }
 
+template <size_t VolumeDim, size_t ThermodynamicDim>
+bool characteristic_hweno_impl(
+    const gsl::not_null<Scalar<DataVector>*> mass_density_cons,
+    const gsl::not_null<tnsr::I<DataVector, VolumeDim>*> momentum_density,
+    const gsl::not_null<Scalar<DataVector>*> energy_density,
+    const double kxrcf_constant, const double neighbor_linear_weight,
+    const Mesh<VolumeDim>& mesh, const Element<VolumeDim>& element,
+    const std::array<double, VolumeDim>& element_size,
+    const std::unordered_map<Direction<VolumeDim>,
+                             tnsr::i<DataVector, VolumeDim>>&
+        internal_unit_normals,
+    const EquationsOfState::EquationOfState<false, ThermodynamicDim>&
+        equation_of_state,
+    const std::unordered_map<
+        std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>,
+        typename NewtonianEuler::Limiters::Weno<VolumeDim>::PackagedData,
+        boost::hash<std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>>>&
+        neighbor_data) noexcept {
+  const bool cell_is_troubled = NewtonianEuler::Limiters::Tci::kxrcf_indicator(
+      *mass_density_cons, *momentum_density, *energy_density, neighbor_data,
+      element, mesh, element_size, internal_unit_normals, kxrcf_constant);
+  if (not cell_is_troubled) {
+    // No limiting is needed
+    return false;
+  }
+
+  // Cellwise means, used in computing the cons/char transformations
+  const auto mean_density =
+      Scalar<double>{mean_value(get(*mass_density_cons), mesh)};
+  const auto mean_momentum = [&momentum_density, &mesh]() noexcept {
+    tnsr::I<double, VolumeDim> result{};
+    for (size_t i = 0; i < VolumeDim; ++i) {
+      result.get(i) = mean_value(momentum_density->get(i), mesh);
+    }
+    return result;
+  }();
+  const auto mean_energy =
+      Scalar<double>{mean_value(get(*energy_density), mesh)};
+
+  // Temp variables for calculations
+  Variables<tmpl::list<
+      NewtonianEuler::Tags::UMinus, NewtonianEuler::Tags::U0<VolumeDim>,
+      NewtonianEuler::Tags::UPlus, ::Tags::TempScalar<0>,
+      ::Tags::TempI<0, VolumeDim>, ::Tags::TempScalar<1>, ::Tags::TempScalar<2>,
+      ::Tags::TempI<1, VolumeDim>, ::Tags::TempScalar<3>>>
+      temp_buffer(mesh.number_of_grid_points());
+  auto& local_char_uminus = get<NewtonianEuler::Tags::UMinus>(temp_buffer);
+  auto& local_char_u0 = get<NewtonianEuler::Tags::U0<VolumeDim>>(temp_buffer);
+  auto& local_char_uplus = get<NewtonianEuler::Tags::UPlus>(temp_buffer);
+  auto& temp_mass_density_cons = get<::Tags::TempScalar<0>>(temp_buffer);
+  auto& temp_momentum_density = get<::Tags::TempI<0, VolumeDim>>(temp_buffer);
+  auto& temp_energy_density = get<::Tags::TempScalar<1>>(temp_buffer);
+  auto& accumulate_mass_density_cons = get<::Tags::TempScalar<2>>(temp_buffer);
+  auto& accumulate_momentum_density =
+      get<::Tags::TempI<1, VolumeDim>>(temp_buffer);
+  auto& accumulate_energy_density = get<::Tags::TempScalar<3>>(temp_buffer);
+
+  // Initialize the accumulating tensors
+  get(accumulate_mass_density_cons) = 0.;
+  for (size_t i = 0; i < VolumeDim; ++i) {
+    accumulate_momentum_density.get(i) = 0.;
+  }
+  get(accumulate_energy_density) = 0.;
+
+  // Storage for transforming neighbor_data into char variables
+  using CharWenoType =
+      Limiters::Weno<VolumeDim, tmpl::list<NewtonianEuler::Tags::UMinus,
+                                           NewtonianEuler::Tags::U0<VolumeDim>,
+                                           NewtonianEuler::Tags::UPlus>>;
+  std::unordered_map<
+      std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>,
+      typename CharWenoType::PackagedData,
+      boost::hash<std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>>>
+      neighbor_char_data{};
+  for (const auto& kv : neighbor_data) {
+    const auto& key = kv.first;
+    const auto& data = kv.second;
+    neighbor_char_data[key].volume_data.initialize(
+        mesh.number_of_grid_points());
+    neighbor_char_data[key].mesh = data.mesh;
+    neighbor_char_data[key].element_size = data.element_size;
+  }
+
+  // Buffers for Hweno extrapolated poly
+  std::unordered_map<
+      std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>, DataVector,
+      boost::hash<std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>>>
+      modified_neighbor_solution_buffer{};
+  for (const auto& neighbor_and_data : neighbor_char_data) {
+    const auto& neighbor = neighbor_and_data.first;
+    modified_neighbor_solution_buffer.insert(std::make_pair(
+        neighbor, DataVector(mesh.number_of_grid_points())));
+  }
+
+  // Apply limiter to chars, for chars w.r.t. each direction
+  for (size_t d = 0; d < VolumeDim; ++d) {
+    const auto normal = [&d]() noexcept {
+      auto normal_components = make_array<VolumeDim>(0.);
+      normal_components[d] = 1.;
+      return tnsr::i<double, VolumeDim>(normal_components);
+    }();
+    const auto right_and_left = NewtonianEuler::Limiters::compute_eigenvectors(
+        mean_density, mean_momentum, mean_energy, equation_of_state, normal);
+    const auto& right = right_and_left.first;
+    const auto& left = right_and_left.second;
+
+    // Transform all field data to char vars:
+    NewtonianEuler::Limiters::char_tensors_from_cons_tensors(
+        make_not_null(&local_char_uminus), make_not_null(&local_char_u0),
+        make_not_null(&local_char_uplus), *mass_density_cons, *momentum_density,
+        *energy_density, left);
+    for (const auto& kv : neighbor_data) {
+      const auto& key = kv.first;
+      const auto& data = kv.second;
+      NewtonianEuler::Limiters::char_vars_from_cons_vars(
+          make_not_null(&(neighbor_char_data[key].volume_data)),
+          data.volume_data, left);
+      NewtonianEuler::Limiters::char_means_from_cons_means(
+          make_not_null(&(neighbor_char_data[key].means)), data.means, left);
+    }
+
+    // Begin HWENO logic
+    ::Limiters::Weno_detail::hweno_impl<NewtonianEuler::Tags::UMinus>(
+        make_not_null(&modified_neighbor_solution_buffer),
+        make_not_null(&local_char_uminus), neighbor_linear_weight, mesh,
+        element, neighbor_char_data);
+    ::Limiters::Weno_detail::hweno_impl<NewtonianEuler::Tags::U0<VolumeDim>>(
+        make_not_null(&modified_neighbor_solution_buffer),
+        make_not_null(&local_char_u0), neighbor_linear_weight, mesh, element,
+        neighbor_char_data);
+    ::Limiters::Weno_detail::hweno_impl<NewtonianEuler::Tags::UPlus>(
+        make_not_null(&modified_neighbor_solution_buffer),
+        make_not_null(&local_char_uplus), neighbor_linear_weight, mesh, element,
+        neighbor_char_data);
+    // End HWENO logic
+
+    // Transform back to conserved variables.
+    NewtonianEuler::Limiters::cons_tensors_from_char_tensors(
+        make_not_null(&temp_mass_density_cons),
+        make_not_null(&temp_momentum_density),
+        make_not_null(&temp_energy_density), local_char_uminus, local_char_u0,
+        local_char_uplus, right);
+
+    // Add contribution from this particular choice of left/right matrices to
+    // the running sum.
+    get(accumulate_mass_density_cons) +=
+        get(temp_mass_density_cons) / static_cast<double>(VolumeDim);
+    for (size_t i = 0; i < VolumeDim; ++i) {
+      accumulate_momentum_density.get(i) +=
+          temp_momentum_density.get(i) / static_cast<double>(VolumeDim);
+    }
+    get(accumulate_energy_density) +=
+        get(temp_energy_density) / static_cast<double>(VolumeDim);
+  }  // for loop over dimensions
+
+  *mass_density_cons = accumulate_mass_density_cons;
+  *momentum_density = accumulate_momentum_density;
+  *energy_density = accumulate_energy_density;
+  return true;  // all components were limited
+}
+
 }  // namespace
 
 namespace NewtonianEuler {
@@ -261,14 +425,17 @@ namespace Limiters {
 template <size_t VolumeDim>
 Weno<VolumeDim>::Weno(const WenoType weno_type,
                       const double neighbor_linear_weight,
-                      const double tvb_constant, const bool apply_flattener,
+                      const double tvb_constant, const double kxrcf_constant,
+                      const bool apply_flattener,
                       const bool disable_for_debugging) noexcept
     : weno_type_(weno_type),
       neighbor_linear_weight_(neighbor_linear_weight),
       tvb_constant_(tvb_constant),
+      kxrcf_constant_(kxrcf_constant),
       apply_flattener_(apply_flattener),
       disable_for_debugging_(disable_for_debugging) {
   ASSERT(tvb_constant >= 0.0, "The TVB constant must be non-negative.");
+  ASSERT(kxrcf_constant >= 0.0, "The KXRCF constant must be non-negative.");
 }
 
 template <size_t VolumeDim>
@@ -277,6 +444,7 @@ void Weno<VolumeDim>::pup(PUP::er& p) noexcept {
   p | weno_type_;
   p | neighbor_linear_weight_;
   p | tvb_constant_;
+  p | kxrcf_constant_;
   p | apply_flattener_;
   p | disable_for_debugging_;
 }
@@ -307,6 +475,9 @@ bool Weno<VolumeDim>::operator()(
     const gsl::not_null<Scalar<DataVector>*> limiter_diagnostics,
     const Mesh<VolumeDim>& mesh, const Element<VolumeDim>& element,
     const std::array<double, VolumeDim>& element_size,
+    const std::unordered_map<Direction<VolumeDim>,
+                             tnsr::i<DataVector, VolumeDim>>&
+        internal_unit_normals,
     const EquationsOfState::EquationOfState<false, ThermodynamicDim>&
         equation_of_state,
     const std::unordered_map<
@@ -361,6 +532,12 @@ bool Weno<VolumeDim>::operator()(
         weno(mass_density_cons, momentum_density, energy_density, mesh, element,
              element_size, neighbor_data);
   } else if (weno_type_ ==
+             NewtonianEuler::Limiters::WenoType::CharacteristicHweno) {
+    limiter_activated = characteristic_hweno_impl(
+        mass_density_cons, momentum_density, energy_density, kxrcf_constant_,
+        neighbor_linear_weight_, mesh, element, element_size,
+        internal_unit_normals, equation_of_state, neighbor_data);
+  } else if (weno_type_ ==
              NewtonianEuler::Limiters::WenoType::CharacteristicSimpleWeno) {
     limiter_activated = characteristic_simple_weno_impl(
         mass_density_cons, momentum_density, energy_density, tvb_constant_,
@@ -411,6 +588,7 @@ bool operator==(const Weno<LocalDim>& lhs, const Weno<LocalDim>& rhs) noexcept {
   return lhs.weno_type_ == rhs.weno_type_ and
          lhs.neighbor_linear_weight_ == rhs.neighbor_linear_weight_ and
          lhs.tvb_constant_ == rhs.tvb_constant_ and
+         lhs.kxrcf_constant_ == rhs.kxrcf_constant_ and
          lhs.apply_flattener_ == rhs.apply_flattener_ and
          lhs.disable_for_debugging_ == rhs.disable_for_debugging_;
 }
@@ -437,6 +615,8 @@ GENERATE_INSTANTIATIONS(INSTANTIATE, (1, 2, 3))
       const gsl::not_null<Scalar<DataVector>*>,                                \
       const gsl::not_null<Scalar<DataVector>*>, const Mesh<DIM(data)>&,        \
       const Element<DIM(data)>&, const std::array<double, DIM(data)>&,         \
+      const std::unordered_map<Direction<DIM(data)>,                           \
+                               tnsr::i<DataVector, DIM(data)>>&,               \
       const EquationsOfState::EquationOfState<false, THERMO_DIM(data)>&,       \
       const std::unordered_map<                                                \
           std::pair<Direction<DIM(data)>, ElementId<DIM(data)>>, PackagedData, \

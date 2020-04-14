@@ -11,6 +11,9 @@
 
 SPECTRE_TEST_CASE("Unit.Evolution.Systems.NewtonianEuler.Limiters.WenoType",
                   "[Limiters][Unit]") {
+  CHECK(NewtonianEuler::Limiters::WenoType::CharacteristicHweno ==
+        TestHelpers::test_creation<NewtonianEuler::Limiters::WenoType>(
+            "CharacteristicHweno"));
   CHECK(NewtonianEuler::Limiters::WenoType::CharacteristicSimpleWeno ==
         TestHelpers::test_creation<NewtonianEuler::Limiters::WenoType>(
             "CharacteristicSimpleWeno"));
@@ -21,6 +24,8 @@ SPECTRE_TEST_CASE("Unit.Evolution.Systems.NewtonianEuler.Limiters.WenoType",
         TestHelpers::test_creation<NewtonianEuler::Limiters::WenoType>(
             "ConservativeSimpleWeno"));
 
+  CHECK(get_output(NewtonianEuler::Limiters::WenoType::CharacteristicHweno) ==
+        "CharacteristicHweno");
   CHECK(get_output(
             NewtonianEuler::Limiters::WenoType::CharacteristicSimpleWeno) ==
         "CharacteristicSimpleWeno");

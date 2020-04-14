@@ -15,6 +15,7 @@ namespace NewtonianEuler {
 namespace Limiters {
 /// \brief Possible types of the NewtonianEuler-specialized WENO limiter
 enum class WenoType {
+  CharacteristicHweno,
   CharacteristicSimpleWeno,
   ConservativeHweno,
   ConservativeSimpleWeno

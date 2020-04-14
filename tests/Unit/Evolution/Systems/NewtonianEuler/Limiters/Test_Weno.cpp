@@ -135,13 +135,14 @@ void test_limiter_work(const Scalar<DataVector>& input_density,
   auto energy_specialized = input_energy;
   auto diagnostics = make_with_value<Scalar<DataVector>>(input_density, 0.0);
   const bool apply_flattener = false;
+  const double kxrcf_constant = 1e99;  // unused
   const NewtonianEuler::Limiters::Weno<VolumeDim> weno_specialized(
       NewtonianEuler::Limiters::WenoType::ConservativeSimpleWeno,
-      neighbor_linear_weight, tvb_constant, apply_flattener);
+      neighbor_linear_weight, tvb_constant, kxrcf_constant, apply_flattener);
   const bool activated_specialized = weno_specialized(
       make_not_null(&density_specialized), make_not_null(&momentum_specialized),
       make_not_null(&energy_specialized), make_not_null(&diagnostics), mesh,
-      element, element_size, eos, neighbor_data);
+      element, element_size, {}, eos, neighbor_data);
 
   CHECK(activated_generic);
   CHECK(diagnostics == make_with_value<Scalar<DataVector>>(input_density, 1.0));
@@ -438,14 +439,15 @@ void test_char_simple_weno_1d() noexcept {
 
   const double neighbor_linear_weight = 0.001;
   const double tvb_constant = 0.0;
+  const double kxrcf_constant = 1e99;  // unused
   const bool apply_flattener = false;
   auto diagnostics = make_with_value<Scalar<DataVector>>(density, 0.0);
   const NewtonianEuler::Limiters::Weno<1> weno(
       NewtonianEuler::Limiters::WenoType::CharacteristicSimpleWeno,
-      neighbor_linear_weight, tvb_constant, apply_flattener);
+      neighbor_linear_weight, tvb_constant, kxrcf_constant, apply_flattener);
   weno(make_not_null(&density), make_not_null(&momentum),
        make_not_null(&energy), make_not_null(&diagnostics), mesh, element,
-       element_size, equation_of_state, neighbor_data);
+       element_size, {}, equation_of_state, neighbor_data);
 
   // Sanity check that char limiter conserves the means
   CHECK(mean_value(get(density), mesh) == approx(expected_density_mean));
@@ -534,6 +536,148 @@ void test_char_simple_weno_1d() noexcept {
   CHECK_ITERABLE_APPROX(energy, energy_generic);
 }
 
+template <size_t VolumeDim>
+void test_hweno_work(
+    const Variables<tmpl::list<NewtonianEuler::Tags::MassDensityCons,
+                               NewtonianEuler::Tags::MomentumDensity<VolumeDim>,
+                               NewtonianEuler::Tags::EnergyDensity>>&
+        local_vars,
+    const Mesh<VolumeDim>& mesh, const Element<VolumeDim>& element,
+    const std::array<double, VolumeDim>& element_size,
+    const std::unordered_map<Direction<VolumeDim>,
+                             tnsr::i<DataVector, VolumeDim>>&
+        internal_unit_normals,
+    const EquationsOfState::IdealFluid<false>& equation_of_state,
+    const std::unordered_map<
+        std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>,
+        typename NewtonianEuler::Limiters::Weno<VolumeDim>::PackagedData,
+        boost::hash<std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>>>&
+        neighbor_data) noexcept {
+  auto density = get<NewtonianEuler::Tags::MassDensityCons>(local_vars);
+  auto momentum =
+      get<NewtonianEuler::Tags::MomentumDensity<VolumeDim>>(local_vars);
+  auto energy = get<NewtonianEuler::Tags::EnergyDensity>(local_vars);
+
+  // After we reconstruct, we expect to recover the same mean
+  const double expected_density_mean = mean_value(get(density), mesh);
+  const auto expected_momentum_means = [&momentum, &mesh]() noexcept {
+    std::array<double, VolumeDim> means;
+    for (size_t d = 0; d < VolumeDim; ++d) {
+      gsl::at(means, d) = mean_value(momentum.get(d), mesh);
+    }
+    return means;
+  }();
+  const double expected_energy_mean = mean_value(get(energy), mesh);
+
+  const double neighbor_linear_weight = 0.001;
+  const double tvb_constant = 1e99;  // unused
+  const double kxrcf_constant = 0.0;
+  const bool apply_flattener = true;
+  auto diagnostics = make_with_value<Scalar<DataVector>>(density, 0.0);
+  const NewtonianEuler::Limiters::Weno<1> weno(
+      NewtonianEuler::Limiters::WenoType::CharacteristicHweno,
+      neighbor_linear_weight, tvb_constant, kxrcf_constant, apply_flattener);
+  const bool activated = weno(
+      make_not_null(&density), make_not_null(&momentum), make_not_null(&energy),
+      make_not_null(&diagnostics), mesh, element, element_size,
+      internal_unit_normals, equation_of_state, neighbor_data);
+
+  CHECK(activated);
+
+  CHECK(density != get<NewtonianEuler::Tags::MassDensityCons>(local_vars));
+  CHECK(momentum !=
+        get<NewtonianEuler::Tags::MomentumDensity<VolumeDim>>(local_vars));
+  CHECK(energy != get<NewtonianEuler::Tags::EnergyDensity>(local_vars));
+
+  CHECK(mean_value(get(density), mesh) == approx(expected_density_mean));
+  for (size_t d = 0; d < VolumeDim; ++d) {
+    CHECK(mean_value(momentum.get(d), mesh) ==
+          approx(gsl::at(expected_momentum_means, d)));
+  }
+  CHECK(mean_value(get(energy), mesh) == approx(expected_energy_mean));
+}
+
+void test_char_hweno_1d() noexcept {
+  INFO("Test NewtonianEuler char-var Hweno limiter in 1D");
+  const auto element = TestHelpers::Limiters::make_element<1>();
+  const auto mesh =
+      Mesh<1>(3, Spectral::Basis::Legendre, Spectral::Quadrature::GaussLobatto);
+  const auto logical_coords = logical_coordinates(mesh);
+  const auto element_size = make_array<1>(1.2);
+  const EquationsOfState::IdealFluid<false> equation_of_state{5. / 3.};
+
+  // Functions to produce dummy data on each element
+  const auto make_center_vars =
+      [](const tnsr::I<DataVector, 1, Frame::Logical>& coords) noexcept {
+        const auto& x = get<0>(coords);
+        Variables<tmpl::list<NewtonianEuler::Tags::MassDensityCons,
+                             NewtonianEuler::Tags::MomentumDensity<1>,
+                             NewtonianEuler::Tags::EnergyDensity>>
+            vars(x.size());
+        get(get<NewtonianEuler::Tags::MassDensityCons>(vars)) =
+            2. - 0.3 * x + square(x);
+        get<0>(get<NewtonianEuler::Tags::MomentumDensity<1>>(vars)) =
+            0.2 * x + 0.3 * square(x);
+        get(get<NewtonianEuler::Tags::EnergyDensity>(vars)) = 0.7 - 0.1 * x;
+        return vars;
+      };
+  const auto make_lower_xi_vars =
+      [](const tnsr::I<DataVector, 1, Frame::Logical>& coords,
+         const double offset = 0.) noexcept {
+        const auto x = get<0>(coords) + offset;
+        Variables<tmpl::list<NewtonianEuler::Tags::MassDensityCons,
+                             NewtonianEuler::Tags::MomentumDensity<1>,
+                             NewtonianEuler::Tags::EnergyDensity>>
+            vars(x.size());
+        get(get<NewtonianEuler::Tags::MassDensityCons>(vars)) =
+            3.3 - x - 0.1 * square(x);
+        get<0>(get<NewtonianEuler::Tags::MomentumDensity<1>>(vars)) =
+            -0.1 + 0.3 * x + 0.2 * square(x);
+        get(get<NewtonianEuler::Tags::EnergyDensity>(vars)) = 1.4 + 0.2 * x;
+        return vars;
+      };
+  const auto make_upper_xi_vars =
+      [](const tnsr::I<DataVector, 1, Frame::Logical>& coords,
+         const double offset = 0.) noexcept {
+        const auto x = get<0>(coords) + offset;
+        Variables<tmpl::list<NewtonianEuler::Tags::MassDensityCons,
+                             NewtonianEuler::Tags::MomentumDensity<1>,
+                             NewtonianEuler::Tags::EnergyDensity>>
+            vars(x.size());
+        get(get<NewtonianEuler::Tags::MassDensityCons>(vars)) =
+            2.3 - x + 0.1 * square(x);
+        get<0>(get<NewtonianEuler::Tags::MomentumDensity<1>>(vars)) =
+            0.6 * x - 0.3 * square(x);
+        get(get<NewtonianEuler::Tags::EnergyDensity>(vars)) =
+            2.1 - 0.2 * x + 0.4 * square(x);
+        return vars;
+      };
+
+  const auto local_vars = make_center_vars(logical_coords);
+  VariablesMap<1> neighbor_vars{};
+
+  const auto lower_xi =
+      std::make_pair(Direction<1>::lower_xi(), ElementId<1>(1));
+  neighbor_vars[lower_xi] = make_lower_xi_vars(logical_coords, -2.);
+  const auto upper_xi =
+      std::make_pair(Direction<1>::upper_xi(), ElementId<1>(2));
+  neighbor_vars[upper_xi] = make_upper_xi_vars(logical_coords, 2.);
+
+  const auto neighbor_data = make_neighbor_data_from_neighbor_vars(
+      mesh, element, element_size, neighbor_vars);
+
+  std::unordered_map<Direction<1>, tnsr::i<DataVector, 1>>
+      internal_unit_normals;
+  for (const auto& dir : Direction<1>::all_directions()) {
+    internal_unit_normals.insert(
+        std::make_pair(dir, tnsr::i<DataVector, 1>{DataVector(
+                                1, dir.side() == Side::Lower ? -1. : 1.)}));
+  }
+
+  test_hweno_work<1>(local_vars, mesh, element, element_size,
+                     internal_unit_normals, equation_of_state, neighbor_data);
+}
+
 }  // namespace
 
 SPECTRE_TEST_CASE("Unit.Evolution.Systems.NewtonianEuler.Limiters.Weno",
@@ -546,4 +690,7 @@ SPECTRE_TEST_CASE("Unit.Evolution.Systems.NewtonianEuler.Limiters.Weno",
 
   // Check char-var simple_weno matches generic simple_weno applies to char vars
   test_char_simple_weno_1d();
+
+  // Very crude check of char-var hweno: just check it is callable as expected
+  test_char_hweno_1d();
 }

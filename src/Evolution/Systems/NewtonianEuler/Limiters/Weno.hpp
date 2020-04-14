@@ -51,6 +51,12 @@ class Weno {
     static constexpr OptionString help = {
         "Type of NewtonianEuler-specialized WENO limiter"};
   };
+  struct KxrcfConstant {
+    using type = double;
+    static type lower_bound() noexcept { return 0.; }
+    static constexpr OptionString help = {
+        "Constant in RHS of KXRCF TCI, for Type = CharacteristicHweno."};
+  };
   struct ApplyFlattener {
     using type = bool;
     static constexpr OptionString help = {
@@ -58,13 +64,15 @@ class Weno {
   };
   using options =
       tmpl::list<Type, typename ConservativeVarsWeno::NeighborWeight,
-                 typename ConservativeVarsWeno::TvbConstant, ApplyFlattener,
+                 typename ConservativeVarsWeno::TvbConstant, KxrcfConstant,
+                 ApplyFlattener,
                  typename ConservativeVarsWeno::DisableForDebugging>;
   static constexpr OptionString help = {
       "A WENO limiter specialized to the NewtonianEuler system"};
 
   Weno(WenoType weno_type, double neighbor_linear_weight, double tvb_constant,
-       bool apply_flattener, bool disable_for_debugging = false) noexcept;
+       double kxrcf_constant, bool apply_flattener,
+       bool disable_for_debugging = false) noexcept;
 
   Weno() noexcept = default;
   Weno(const Weno& /*rhs*/) = default;
@@ -95,10 +103,13 @@ class Weno {
                  NewtonianEuler::Tags::MomentumDensity<VolumeDim>,
                  NewtonianEuler::Tags::EnergyDensity,
                  ::Tags::LimiterDiagnostics>;
-  using limit_argument_tags = tmpl::list<domain::Tags::Mesh<VolumeDim>,
-                                         domain::Tags::Element<VolumeDim>,
-                                         domain::Tags::SizeOfElement<VolumeDim>,
-                                         ::hydro::Tags::EquationOfStateBase>;
+  using limit_argument_tags = tmpl::list<
+      domain::Tags::Mesh<VolumeDim>, domain::Tags::Element<VolumeDim>,
+      domain::Tags::SizeOfElement<VolumeDim>,
+      domain::Tags::Interface<
+          domain::Tags::InternalDirections<VolumeDim>,
+          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<VolumeDim>>>,
+      ::hydro::Tags::EquationOfStateBase>;
 
   /// \brief Limit the solution on the element
   template <size_t ThermodynamicDim>
@@ -109,6 +120,9 @@ class Weno {
       gsl::not_null<Scalar<DataVector>*> limiter_diagnostics,
       const Mesh<VolumeDim>& mesh, const Element<VolumeDim>& element,
       const std::array<double, VolumeDim>& element_size,
+      const std::unordered_map<Direction<VolumeDim>,
+                               tnsr::i<DataVector, VolumeDim>>&
+          internal_unit_normals,
       const EquationsOfState::EquationOfState<false, ThermodynamicDim>&
           equation_of_state,
       const std::unordered_map<
@@ -125,6 +139,7 @@ class Weno {
   WenoType weno_type_;
   double neighbor_linear_weight_;
   double tvb_constant_;
+  double kxrcf_constant_;
   bool apply_flattener_;
   bool disable_for_debugging_;
 };
