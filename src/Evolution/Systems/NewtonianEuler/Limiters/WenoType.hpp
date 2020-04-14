@@ -14,7 +14,11 @@ struct create_from_yaml;
 namespace NewtonianEuler {
 namespace Limiters {
 /// \brief Possible types of the NewtonianEuler-specialized WENO limiter
-enum class WenoType { ConservativeHweno, ConservativeSimpleWeno };
+enum class WenoType {
+  CharacteristicSimpleWeno,
+  ConservativeHweno,
+  ConservativeSimpleWeno
+};
 
 std::ostream& operator<<(std::ostream& os,
                          Limiters::WenoType weno_type) noexcept;
