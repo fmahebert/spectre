@@ -95,8 +95,30 @@ void PositivityPreservingLaxFriedrichs<Dim>::operator()(
     const Scalar<DataVector>& max_n_dot_f_mass_density_ext,
     const Scalar<DataVector>& /*max_n_dot_f_energy_density_ext*/) const
     noexcept {
+  auto corrected_minus_normal_dot_flux_mass_density_ext =
+      minus_normal_dot_flux_mass_density_ext;
+  auto corrected_minus_normal_dot_flux_momentum_density_ext =
+      minus_normal_dot_flux_momentum_density_ext;
+  auto corrected_minus_normal_dot_flux_energy_density_ext =
+      minus_normal_dot_flux_energy_density_ext;
+  auto corrected_max_abs_char_speed_ext = max_abs_char_speed_ext;
+  auto corrected_max_n_dot_f_mass_density_ext = max_n_dot_f_mass_density_ext;
+
+  const bool small_rho_ext = max(abs(get(mass_density_ext))) < 1e-15;
+  const bool small_e_ext = max(abs(get(energy_density_ext))) < 1e-15;
+  if (small_rho_ext and small_e_ext) {
+    get(corrected_minus_normal_dot_flux_mass_density_ext) = 0.;
+    for (size_t i = 0; i < Dim; ++i) {
+      corrected_minus_normal_dot_flux_momentum_density_ext.get(i) = 0.;
+    }
+    get(corrected_minus_normal_dot_flux_energy_density_ext) = 0.;
+    get(corrected_max_abs_char_speed_ext) = 0.;
+    // no need to place a limit on ingoing fluxes
+    get(corrected_max_n_dot_f_mass_density_ext) = 1e99;
+  }
+
   const Scalar<DataVector> max_abs_char_speed(DataVector(
-      max(get(max_abs_char_speed_int), get(max_abs_char_speed_ext))));
+      max(get(max_abs_char_speed_int), get(corrected_max_abs_char_speed_ext))));
   const auto assemble_numerical_flux =
       [&max_abs_char_speed](const auto n_dot_num_f, const auto& n_dot_f_in,
                             const auto& u_in, const auto& minus_n_dot_f_ex,
@@ -110,16 +132,17 @@ void PositivityPreservingLaxFriedrichs<Dim>::operator()(
       };
   assemble_numerical_flux(normal_dot_numerical_flux_mass_density,
                           normal_dot_flux_mass_density_int, mass_density_int,
-                          minus_normal_dot_flux_mass_density_ext,
+                          corrected_minus_normal_dot_flux_mass_density_ext,
                           mass_density_ext);
-  assemble_numerical_flux(
-      normal_dot_numerical_flux_momentum_density,
-      normal_dot_flux_momentum_density_int, momentum_density_int,
-      minus_normal_dot_flux_momentum_density_ext, momentum_density_ext);
+  assemble_numerical_flux(normal_dot_numerical_flux_momentum_density,
+                          normal_dot_flux_momentum_density_int,
+                          momentum_density_int,
+                          corrected_minus_normal_dot_flux_momentum_density_ext,
+                          momentum_density_ext);
   assemble_numerical_flux(
       normal_dot_numerical_flux_energy_density,
       normal_dot_flux_energy_density_int, energy_density_int,
-      minus_normal_dot_flux_energy_density_ext, energy_density_ext);
+      corrected_minus_normal_dot_flux_energy_density_ext, energy_density_ext);
 
   if (not enable_pp_checks_) {
     // For "vanilla" LF flux, exit here. For PP checks, continue...
@@ -159,7 +182,7 @@ void PositivityPreservingLaxFriedrichs<Dim>::operator()(
   const double mean_int =
       mean_value(get(normal_dot_flux_mass_density_int), mesh);
   const double mean_ext =
-      -mean_value(get(minus_normal_dot_flux_mass_density_ext), mesh);
+      -mean_value(get(corrected_minus_normal_dot_flux_mass_density_ext), mesh);
   const double mean_num =
       mean_value(get(*normal_dot_numerical_flux_mass_density), mesh);
   if (mean_num >= 0.0) {
@@ -175,11 +198,11 @@ void PositivityPreservingLaxFriedrichs<Dim>::operator()(
             normal_dot_flux_energy_density_int;
       } else if (mean_ext < max) {
         *normal_dot_numerical_flux_mass_density =
-            minus_normal_dot_flux_mass_density_ext;
+            corrected_minus_normal_dot_flux_mass_density_ext;
         *normal_dot_numerical_flux_momentum_density =
-            minus_normal_dot_flux_momentum_density_ext;
+            corrected_minus_normal_dot_flux_momentum_density_ext;
         *normal_dot_numerical_flux_energy_density =
-            minus_normal_dot_flux_energy_density_ext;
+            corrected_minus_normal_dot_flux_energy_density_ext;
         get(*normal_dot_numerical_flux_mass_density) *= -1.0;
         for (size_t i = 0; i < Dim; ++i) {
           normal_dot_numerical_flux_momentum_density->get(i) *= -1.0;
@@ -208,11 +231,11 @@ void PositivityPreservingLaxFriedrichs<Dim>::operator()(
     if (mean_num < -max) {
       if (mean_ext > -max) {
         *normal_dot_numerical_flux_mass_density =
-            minus_normal_dot_flux_mass_density_ext;
+            corrected_minus_normal_dot_flux_mass_density_ext;
         *normal_dot_numerical_flux_momentum_density =
-            minus_normal_dot_flux_momentum_density_ext;
+            corrected_minus_normal_dot_flux_momentum_density_ext;
         *normal_dot_numerical_flux_energy_density =
-            minus_normal_dot_flux_energy_density_ext;
+            corrected_minus_normal_dot_flux_energy_density_ext;
         get(*normal_dot_numerical_flux_mass_density) *= -1.0;
         for (size_t i = 0; i < Dim; ++i) {
           normal_dot_numerical_flux_momentum_density->get(i) *= -1.0;
