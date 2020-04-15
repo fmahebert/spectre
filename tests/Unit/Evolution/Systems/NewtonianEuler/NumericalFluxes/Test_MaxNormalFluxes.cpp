@@ -22,6 +22,7 @@
 #include "Evolution/Systems/NewtonianEuler/Tags.hpp"
 #include "Framework/CheckWithRandomValues.hpp"
 #include "Framework/SetupLocalPythonEnvironment.hpp"
+#include "Helpers/Evolution/DiscontinuousGalerkin/Limiters/TestHelpers.hpp"
 #include "Helpers/NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/TestHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
@@ -38,6 +39,7 @@ void test_max_normal_fluxes_1d() noexcept {
   const size_t number_of_points = mesh.number_of_grid_points();
   const std::array<double, 1> element_size = {{0.4}};
   const TimeDelta dt(Slab(0., 1.), Rational(1, 10));
+  const auto element = TestHelpers::Limiters::make_element<1>();
 
   const Scalar<DataVector> scalar(DataVector{{1.2, 1.4, 1.6}});
   const Scalar<DataVector> expected_max_n_dot_f(
@@ -45,7 +47,7 @@ void test_max_normal_fluxes_1d() noexcept {
 
   Scalar<DataVector> max_n_dot_f;
   NewtonianEuler::max_n_dot_f_of_positive_scalar(
-      make_not_null(&max_n_dot_f), scalar, mesh, element_size, dt);
+      make_not_null(&max_n_dot_f), scalar, mesh, element, element_size, dt);
   CHECK_ITERABLE_APPROX(max_n_dot_f, expected_max_n_dot_f);
 }
 
@@ -55,6 +57,8 @@ void test_max_normal_fluxes_2d() noexcept {
   const size_t number_of_points = mesh.number_of_grid_points();
   const std::array<double, 2> element_size = {{0.4, 0.4}};
   const TimeDelta dt(Slab(0., 1.), Rational(1, 10));
+  const auto element = TestHelpers::Limiters::make_element<2>();
+
   const Scalar<DataVector> scalar(
       DataVector{{1.2, 1.4, 1.6, 1.1, 1.3, 1.5, 1.0, 1.2, 1.4}});
   const Scalar<DataVector> expected_max_n_dot_f(
@@ -62,7 +66,7 @@ void test_max_normal_fluxes_2d() noexcept {
 
   Scalar<DataVector> max_n_dot_f;
   NewtonianEuler::max_n_dot_f_of_positive_scalar(
-      make_not_null(&max_n_dot_f), scalar, mesh, element_size, dt);
+      make_not_null(&max_n_dot_f), scalar, mesh, element, element_size, dt);
   CHECK_ITERABLE_APPROX(max_n_dot_f, expected_max_n_dot_f);
 }
 
@@ -72,6 +76,8 @@ void test_max_normal_fluxes_3d() noexcept {
   const size_t number_of_points = mesh.number_of_grid_points();
   const std::array<double, 3> element_size = {{0.4, 0.4, 0.4}};
   const TimeDelta dt(Slab(0., 1.), Rational(1, 10));
+  const auto element = TestHelpers::Limiters::make_element<3>();
+
   const Scalar<DataVector> scalar(DataVector{
       {1.2, 1.4, 1.6, 1.1, 1.3, 1.5, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 1.5, 1.7,
        1.9, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 1.9, 2.1, 2.3, 1.8, 2.0, 2.2}});
@@ -80,7 +86,7 @@ void test_max_normal_fluxes_3d() noexcept {
 
   Scalar<DataVector> max_n_dot_f;
   NewtonianEuler::max_n_dot_f_of_positive_scalar(
-      make_not_null(&max_n_dot_f), scalar, mesh, element_size, dt);
+      make_not_null(&max_n_dot_f), scalar, mesh, element, element_size, dt);
   CHECK_ITERABLE_APPROX(max_n_dot_f, expected_max_n_dot_f);
 }
 
