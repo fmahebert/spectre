@@ -533,12 +533,24 @@ bool Weno<VolumeDim>::operator()(
              element_size, neighbor_data);
   } else if (weno_type_ ==
              NewtonianEuler::Limiters::WenoType::CharacteristicHweno) {
+    // If mean density is atmosphere, we avoid the work altogether.
+    // (Bonus: avoids FPEs in computing left/right char matrices in atmosphere)
+    // TODO: get actual value from atmosphere fixer?
+    if (mean_density <= 1e-15) {
+      return false;
+    }
     limiter_activated = characteristic_hweno_impl(
         mass_density_cons, momentum_density, energy_density, kxrcf_constant_,
         neighbor_linear_weight_, mesh, element, element_size,
         internal_unit_normals, equation_of_state, neighbor_data);
   } else if (weno_type_ ==
              NewtonianEuler::Limiters::WenoType::CharacteristicSimpleWeno) {
+    // If mean density is atmosphere, we avoid the work altogether.
+    // (Bonus: avoids FPEs in computing left/right char matrices in atmosphere)
+    // TODO: get actual value from atmosphere fixer?
+    if (mean_density <= 1e-15) {
+      return false;
+    }
     limiter_activated = characteristic_simple_weno_impl(
         mass_density_cons, momentum_density, energy_density, tvb_constant_,
         neighbor_linear_weight_, mesh, element, element_size, equation_of_state,
