@@ -23,7 +23,6 @@
 #include "Parallel/CharmRegistration.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/Info.hpp"
-#include "Parallel/Main.decl.h"
 #include "Parallel/NodeLock.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
@@ -44,6 +43,7 @@
 
 #include "Parallel/Printf.hpp"
 
+#include "Parallel/Main.decl.h"
 #include "Algorithms/AlgorithmArray.decl.h"
 #include "Algorithms/AlgorithmGroup.decl.h"
 #include "Algorithms/AlgorithmNodegroup.decl.h"
@@ -215,6 +215,8 @@ CREATE_IS_CALLABLE_V(global_startup_routines)
 
 CREATE_HAS_STATIC_MEMBER_VARIABLE(LoadBalancing)
 CREATE_HAS_STATIC_MEMBER_VARIABLE_V(LoadBalancing)
+
+CREATE_HAS_STATIC_MEMBER_VARIABLE(use_at_sync)
 }  // namespace detail
 
 /*!
@@ -766,7 +768,11 @@ AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>::
     : AlgorithmImpl() {
   if constexpr (std::is_same_v<typename ParallelComponent::chare_type,
                                Algorithms::Array>) {
-    this->usesAtSync = true;
+    if constexpr (detail::has_use_at_sync<ParallelComponent>::value) {
+      this->usesAtSync = ParallelComponent::use_at_sync;
+    } else {
+      this->usesAtSync = true;
+    }
     this->setMigratable(true);
   }
   (void)initialization_items;  // avoid potential compiler warnings if unused

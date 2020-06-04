@@ -1,0 +1,19 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SimpleLoadBalancerTest3D
+# Check: parse;execute
+
+TestLoadBalancing:
+  NumberOfSteps: 10
+  ExecutionLoad: 10000
+  InternalStorageSize: 5
+  CommunicationSize: 200
+
+DomainCreator:
+  Brick:
+    LowerBound: [0.0, 0.0, 0.0]
+    UpperBound: [0.1, 0.1, 0.1]
+    IsPeriodicIn: [false, false, false]
+    InitialRefinement: [2, 2, 2]
+    InitialGridPoints: [4, 4, 4]

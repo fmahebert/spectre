@@ -295,5 +295,6 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &Parallel::register_derived_classes_with_charm<TimeStepper>,
     &Parallel::register_derived_classes_with_charm<
         Trigger<metavariables::triggers>>};
+
 static const std::vector<void (*)()> charm_init_proc_funcs{
     &enable_floating_point_exceptions};
