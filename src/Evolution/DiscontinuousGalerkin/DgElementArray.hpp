@@ -28,6 +28,30 @@
 
 #include "Utilities/MakeString.hpp"
 
+// Control the initial distribution of DgElementArray elements across the
+// processors available
+namespace OptionTags {
+template <size_t VolumeDim>
+struct DomainPartitionChunkSize {
+  static std::string name() noexcept { return "DomainPartitionChunkSize"; }
+  static constexpr Options::String help = "Domain partition chunk size";
+  using type = std::array<size_t, VolumeDim>;
+  using group = evolution::OptionTags::Group;
+};
+}  // namespace OptionTags
+namespace Tags {
+template <size_t VolumeDim>
+struct DomainPartitionChunkSize : db::SimpleTag {
+  using type = std::array<size_t, VolumeDim>;
+  using option_tags =
+      tmpl::list<::OptionTags::DomainPartitionChunkSize<VolumeDim>>;
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type& partition) noexcept {
+    return partition;
+  }
+};
+}  // namespace Tags
+
 /*!
  * \brief Don't try to import initial data from a data file
  *
@@ -200,6 +224,14 @@ void DgElementArray<Metavariables, PhaseDepActionList, ImportInitialData>::
   const auto& initial_refinement_levels =
       get<domain::Tags::InitialRefinementLevels<volume_dim>>(
           initialization_items);
+
+  // Get desired partition
+  const auto partition = get<Tags::DomainPartitionChunkSize<volume_dim>,
+                             Metavariables>(local_cache);
+
+  // If "zero" partition, use behavior from spectre:develop
+  if (partition == make_array<volume_dim>(0_st)) {
+
   int which_proc = 0;
   for (const auto& block : domain.blocks()) {
     const auto initial_ref_levs = initial_refinement_levels[block.id()];
@@ -211,6 +243,46 @@ void DgElementArray<Metavariables, PhaseDepActionList, ImportInitialData>::
           .insert(global_cache, initialization_items, which_proc);
       which_proc = which_proc + 1 == number_of_procs ? 0 : which_proc + 1;
     }
+  }
+
+  } else {
+
+  // Check partition is compatible with the domain
+  ASSERT(domain.blocks().size() == 1, "assuming single block");
+  for (size_t i = 0; i < volume_dim; ++i) {
+    if (two_to_the(initial_refinement_levels[0][i]) % partition[i] != 0) {
+      ERROR("input partition did not match extents");
+    }
+  }
+
+  // Relate procs to nodes
+  // NOTE: currently hardcoded for 2 nodes (of any number of procs/node)
+  constexpr size_t number_of_nodes = 2;
+  const int number_of_procs = Parallel::number_of_procs();
+  ASSERT(number_of_procs % number_of_nodes == 0, "oops");
+  const size_t number_of_procs_per_node =
+      static_cast<size_t>(number_of_procs) / number_of_nodes;
+  auto which_proc_on_this_node = make_array<number_of_nodes>(0_st);
+
+  for (const auto& block : domain.blocks()) {
+    const auto initial_ref_levs = initial_refinement_levels[block.id()];
+    const std::vector<ElementId<volume_dim>> element_ids =
+        initial_element_ids(block.id(), initial_ref_levs);
+    for (size_t i = 0; i < element_ids.size(); ++i) {
+      size_t which_node = 0;
+      for (size_t d = 0; d < volume_dim; ++d) {
+        which_node += element_ids[i].segment_ids()[d].index() / partition[d];
+      }
+      which_node = which_node % number_of_nodes;
+      auto& which_proc = which_proc_on_this_node[which_node];
+      dg_element_array(ElementId<volume_dim>(element_ids[i]))
+          .insert(global_cache, initialization_items,
+              which_proc + which_node * number_of_procs_per_node);
+      which_proc = (which_proc + 1 == number_of_procs_per_node ? 0 :
+                                      which_proc + 1);
+    }
+  }
+
   }
   dg_element_array.doneInserting();
 }

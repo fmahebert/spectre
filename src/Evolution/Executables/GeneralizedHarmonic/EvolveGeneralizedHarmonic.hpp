@@ -278,7 +278,8 @@ struct EvolutionMetavars {
   // metavariables
   using const_global_cache_tags =
       tmpl::list<analytic_solution_tag, normal_dot_numerical_flux,
-                 time_stepper_tag, Tags::EventsAndTriggers<events, triggers>>;
+                 time_stepper_tag, Tags::EventsAndTriggers<events, triggers>,
+                 Tags::DomainPartitionChunkSize<volume_dim>>;
 
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
       tmpl::push_back<typename Event<observation_events>::creatable_classes,
