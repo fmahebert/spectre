@@ -46,21 +46,6 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/FirstOrder/FirstOrderScheme.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/FirstOrder/FirstOrderSchemeLts.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
-#include "NumericalAlgorithms/Interpolation/AddTemporalIdsToInterpolationTarget.hpp"
-#include "NumericalAlgorithms/Interpolation/Callbacks/FindApparentHorizon.hpp"
-#include "NumericalAlgorithms/Interpolation/Callbacks/ObserveTimeSeriesOnSurface.hpp"
-#include "NumericalAlgorithms/Interpolation/CleanUpInterpolator.hpp"
-#include "NumericalAlgorithms/Interpolation/InitializeInterpolationTarget.hpp"
-#include "NumericalAlgorithms/Interpolation/Interpolate.hpp"
-#include "NumericalAlgorithms/Interpolation/InterpolationTarget.hpp"
-#include "NumericalAlgorithms/Interpolation/InterpolationTargetApparentHorizon.hpp"
-#include "NumericalAlgorithms/Interpolation/InterpolationTargetReceiveVars.hpp"
-#include "NumericalAlgorithms/Interpolation/Interpolator.hpp"
-#include "NumericalAlgorithms/Interpolation/InterpolatorReceivePoints.hpp"
-#include "NumericalAlgorithms/Interpolation/InterpolatorReceiveVolumeData.hpp"
-#include "NumericalAlgorithms/Interpolation/InterpolatorRegisterElement.hpp"
-#include "NumericalAlgorithms/Interpolation/Tags.hpp"
-#include "NumericalAlgorithms/Interpolation/TryToInterpolate.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/ManagePhaseControl.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
@@ -82,6 +67,7 @@
 #include "ParallelAlgorithms/EventsAndTriggers/Tags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/GaugeWave.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/WrappedGr.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -211,54 +197,6 @@ struct EvolutionMetavars {
   using global_sync_phases =
       tmpl::list<std::integral_constant<Phase, Phase::LoadBalancing>>;
 
-  // HACK until we merge in a compute tag StrahlkorperGr::AreaCompute.
-  // For now, simply do a surface integral of unity on the horizon to get the
-  // horizon area.
-  struct Unity : db::SimpleTag {
-    using type = Scalar<DataVector>;
-  };
-
-  struct UnityCompute : Unity, db::ComputeTag {
-    using base = Unity;
-    using return_type = Scalar<DataVector>;
-    static void function(const gsl::not_null<return_type*> result,
-                         const Scalar<DataVector>& used_for_size) noexcept {
-      *result = make_with_value<Scalar<DataVector>>(used_for_size, 1.0);
-    }
-    using argument_tags =
-        tmpl::list<StrahlkorperGr::Tags::AreaElement<Frame::Inertial>>;
-  };
-
-  struct AhA {
-    using tags_to_observe =
-        tmpl::list<StrahlkorperGr::Tags::SurfaceIntegralCompute<Unity, frame>>;
-    using compute_items_on_source = tmpl::list<
-        gr::Tags::SpatialMetricCompute<volume_dim, frame, DataVector>,
-        ah::Tags::InverseSpatialMetricCompute<volume_dim, frame>,
-        ah::Tags::ExtrinsicCurvatureCompute<volume_dim, frame>,
-        ah::Tags::SpatialChristoffelSecondKindCompute<volume_dim, frame>>;
-    using vars_to_interpolate_to_target =
-        tmpl::list<gr::Tags::SpatialMetric<volume_dim, frame, DataVector>,
-                   gr::Tags::InverseSpatialMetric<volume_dim, frame>,
-                   gr::Tags::ExtrinsicCurvature<volume_dim, frame>,
-                   gr::Tags::SpatialChristoffelSecondKind<volume_dim, frame>>;
-    using compute_items_on_target =
-        tmpl::append<tmpl::list<StrahlkorperGr::Tags::AreaElementCompute<frame>,
-                                UnityCompute>,
-                     tags_to_observe>;
-    using compute_target_points =
-        intrp::TargetPoints::ApparentHorizon<AhA, ::Frame::Inertial>;
-    using post_interpolation_callback =
-        intrp::callbacks::FindApparentHorizon<AhA>;
-    using post_horizon_find_callback =
-        intrp::callbacks::ObserveTimeSeriesOnSurface<tags_to_observe, AhA, AhA>;
-  };
-  using interpolation_target_tags = tmpl::list<AhA>;
-  using interpolator_source_vars =
-      tmpl::list<gr::Tags::SpacetimeMetric<volume_dim, frame>,
-                 GeneralizedHarmonic::Tags::Pi<volume_dim, frame>,
-                 GeneralizedHarmonic::Tags::Phi<volume_dim, frame>>;
-
   using observation_events = tmpl::list<
       dg::Events::Registrars::ObserveErrorNorms<Tags::Time,
                                                 analytic_solution_fields>,
@@ -270,9 +208,7 @@ struct EvolutionMetavars {
                                           Triggers::Registrars::SpecifiedSlabs>;
 
   // Events include the observation events and finding the horizon
-  using events = tmpl::push_back<
-      observation_events,
-      intrp::Events::Registrars::Interpolate<3, AhA, interpolator_source_vars>>;
+  using events = tmpl::push_back<observation_events>;
 
   // A tmpl::list of tags to be added to the GlobalCache by the
   // metavariables
@@ -282,8 +218,7 @@ struct EvolutionMetavars {
                  Tags::DomainPartitionChunkSize<volume_dim>>;
 
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
-      tmpl::push_back<typename Event<observation_events>::creatable_classes,
-                      typename AhA::post_horizon_find_callback>>;
+      tmpl::push_back<typename Event<observation_events>::creatable_classes>>;
 
   using step_actions = tmpl::list<
       dg::Actions::ComputeNonconservativeBoundaryFluxes<
@@ -388,8 +323,7 @@ struct EvolutionMetavars {
                                  SelfStart::self_start_procedure<step_actions>>,
           Parallel::PhaseActions<
               Phase, Phase::Register,
-              tmpl::list<intrp::Actions::RegisterElementWithInterpolator,
-                         dg_registration_list,
+              tmpl::list<dg_registration_list,
                          Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
               Phase, Phase::Evolve,
@@ -414,8 +348,6 @@ struct EvolutionMetavars {
   using component_list = tmpl::flatten<tmpl::list<
       observers::Observer<EvolutionMetavars>,
       observers::ObserverWriter<EvolutionMetavars>,
-      intrp::Interpolator<EvolutionMetavars>,
-      intrp::InterpolationTarget<EvolutionMetavars, AhA>,
       tmpl::conditional_t<evolution::is_numeric_initial_data_v<initial_data>,
                           importers::VolumeDataReader<EvolutionMetavars>,
                           tmpl::list<>>,

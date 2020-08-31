@@ -33,6 +33,17 @@ function(add_generalized_harmonic_executable
 endfunction(add_generalized_harmonic_executable)
 
 add_generalized_harmonic_executable(
+  GaugeWave
+  GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::GaugeWave<3>>
+  GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::GaugeWave<3>>
+)
+target_link_libraries(
+  EvolveGhGaugeWave
+  PRIVATE
+  GeneralRelativitySolutions
+  )
+
+add_generalized_harmonic_executable(
   KerrSchild
   GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::KerrSchild>
   GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::KerrSchild>
