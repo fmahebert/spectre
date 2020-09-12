@@ -14,6 +14,7 @@
 #include "ErrorHandling/Error.hpp"
 #include "Parallel/CharmRegistration.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
+#include "Utilities/BoostHelpers.hpp"
 #include "Utilities/PrettyType.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
@@ -167,6 +168,14 @@ class GlobalCache : public CBase_GlobalCache<Metavariables> {
   GlobalCache(GlobalCache&&) = default;
   GlobalCache& operator=(GlobalCache&&) = default;
   /// \endcond
+
+  void pup(PUP::er& p) noexcept override {  // NOLINT
+    p | global_cache_;
+    p | parallel_components_;
+    p | parallel_components_have_been_set_;
+    p | self_proxy_;
+    p | main_proxy_;
+  }
 
   /// Entry method to set the ParallelComponents (should only be called once)
   void set_parallel_components(
