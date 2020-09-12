@@ -156,7 +156,10 @@ class GlobalCache : public CBase_GlobalCache<Metavariables> {
                             get_const_global_cache_tags<Metavariables>>
                                 global_cache) noexcept
       : global_cache_(std::move(global_cache)) {}
-  explicit GlobalCache(CkMigrateMessage* /*msg*/) {}
+
+  explicit GlobalCache(CkMigrateMessage* msg) noexcept :
+      CBase_GlobalCache<Metavariables>{msg} {}
+
   ~GlobalCache() noexcept override {
     (void)Parallel::charmxx::RegisterChare<
         GlobalCache<Metavariables>,
