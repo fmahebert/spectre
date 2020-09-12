@@ -143,9 +143,10 @@ def create_header_file(args):
         "    typename ParallelComponent::phase_dependent_action_list\n" \
         "                  >::AlgorithmImpl;\n" \
         "\n" \
-        "  explicit Algorithm%s(CkMigrateMessage* /*message*/) noexcept : \n"\
+        "  explicit Algorithm%s(CkMigrateMessage* msg) noexcept : \n"\
         "    Parallel::AlgorithmImpl<ParallelComponent,\n"\
-        "    typename ParallelComponent::phase_dependent_action_list>{} {}\n"\
+        "    typename ParallelComponent::phase_dependent_action_list>{msg} "\
+        "{}\n"\
         "\n" \
         "  void pup(PUP::er& p) noexcept override {  // NOLINT \n"\
         "Parallel::AlgorithmImpl<ParallelComponent,\n"\
