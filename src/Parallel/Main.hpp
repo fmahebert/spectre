@@ -59,6 +59,22 @@ class Main : public CBase_Main<Metavariables> {
   Main& operator=(Main&&) = default;
   /// \endcond
 
+  void pup(PUP::er& p) noexcept override {  // NOLINT
+    p | current_phase_;
+    p | global_cache_proxy_;
+    p | requested_global_sync_phases_;
+    p | phase_to_resume_after_sync_phases_;
+    p | number_of_lb_components_;
+    p | number_of_lb_components_returned_;
+    p | lb_error_timer_;
+    p | lb_time_waiting_;
+    // Note: we do NOT serialize the options.
+    // This is because options are only used in the initialization phase when
+    // the executable first starts up. Thereafter, the information from the
+    // options will be held in various code objects that will themselves be
+    // serialized.
+  }
+
   explicit Main(CkArgMsg* msg) noexcept;
   explicit Main(CkMigrateMessage* /*msg*/)
       : options_("Uninitialized after migration") {}
@@ -99,9 +115,9 @@ class Main : public CBase_Main<Metavariables> {
       tmpl::bind<
           tmpl::type_,
           tmpl::bind<Parallel::proxy_from_parallel_component, tmpl::_1>>>;
+
   typename Metavariables::Phase current_phase_{
       Metavariables::Phase::Initialization};
-
   CProxy_GlobalCache<Metavariables> global_cache_proxy_;
   std::set<typename Metavariables::Phase> requested_global_sync_phases_;
   boost::optional<typename Metavariables::Phase>
