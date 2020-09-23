@@ -118,6 +118,10 @@ namespace detail {
 
 template <typename CBaseInherit>
 class CBaseWithResume : public CBaseInherit {
+ public:
+  CBaseWithResume() = default;
+  explicit CBaseWithResume(CkMigrateMessage* msg) noexcept
+      : CBaseInherit{msg} {}
   virtual void ResumeFromSync() = 0;
 };
 
