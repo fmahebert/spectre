@@ -93,8 +93,8 @@
 #include "PointwiseFunctions/GeneralRelativity/SpatialMetric.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
-#include "Time/Actions/ChangeSlabSize.hpp"
-#include "Time/Actions/ChangeStepSize.hpp"
+//#include "Time/Actions/ChangeSlabSize.hpp"
+//#include "Time/Actions/ChangeStepSize.hpp"
 #include "Time/Actions/RecordTimeStepperData.hpp"
 #include "Time/Actions/SelfStartActions.hpp"
 #include "Time/Actions/UpdateU.hpp"
@@ -154,23 +154,23 @@ struct EvolutionMetavars {
     Exit
   };
 
-  using step_choosers_common =
-      tmpl::list<StepChoosers::Registrars::Cfl<volume_dim, Frame::Inertial>,
-                 StepChoosers::Registrars::Constant,
-                 StepChoosers::Registrars::Increase>;
-  using step_choosers_for_step_only =
-      tmpl::list<StepChoosers::Registrars::PreventRapidIncrease>;
-  using step_choosers_for_slab_only =
-      tmpl::list<StepChoosers::Registrars::StepToTimes>;
-  using step_choosers = tmpl::conditional_t<
-      local_time_stepping,
-      tmpl::append<step_choosers_common, step_choosers_for_step_only>,
-      tmpl::list<>>;
-  using slab_choosers = tmpl::conditional_t<
-      local_time_stepping,
-      tmpl::append<step_choosers_common, step_choosers_for_slab_only>,
-      tmpl::append<step_choosers_common, step_choosers_for_step_only,
-                   step_choosers_for_slab_only>>;
+  //using step_choosers_common =
+  //    tmpl::list<StepChoosers::Registrars::Cfl<volume_dim, Frame::Inertial>,
+  //               StepChoosers::Registrars::Constant,
+  //               StepChoosers::Registrars::Increase>;
+  //using step_choosers_for_step_only =
+  //    tmpl::list<StepChoosers::Registrars::PreventRapidIncrease>;
+  //using step_choosers_for_slab_only =
+  //    tmpl::list<StepChoosers::Registrars::StepToTimes>;
+  //using step_choosers = tmpl::conditional_t<
+  //    local_time_stepping,
+  //    tmpl::append<step_choosers_common, step_choosers_for_step_only>,
+  //    tmpl::list<>>;
+  //using slab_choosers = tmpl::conditional_t<
+  //    local_time_stepping,
+  //    tmpl::append<step_choosers_common, step_choosers_for_slab_only>,
+  //    tmpl::append<step_choosers_common, step_choosers_for_step_only,
+  //                 step_choosers_for_slab_only>>;
 
   using time_stepper_tag = Tags::TimeStepper<
       tmpl::conditional_t<local_time_stepping, LtsTimeStepper, TimeStepper>>;
@@ -263,8 +263,8 @@ struct EvolutionMetavars {
       dg::Events::Registrars::ObserveErrorNorms<Tags::Time,
                                                 analytic_solution_fields>,
       dg::Events::Registrars::ObserveFields<
-          volume_dim, Tags::Time, observe_fields, analytic_solution_fields>,
-      Events::Registrars::ChangeSlabSize<slab_choosers>>;
+          volume_dim, Tags::Time, observe_fields, analytic_solution_fields>>;
+      //Events::Registrars::ChangeSlabSize<slab_choosers>>;
   using triggers = Triggers::time_triggers;
   using global_sync_triggers = tmpl::list<Triggers::Registrars::EveryNSlabs,
                                           Triggers::Registrars::SpecifiedSlabs>;
@@ -393,7 +393,8 @@ struct EvolutionMetavars {
           Parallel::PhaseActions<
               Phase, Phase::Evolve,
               tmpl::list<
-                  Actions::RunEventsAndTriggers, Actions::ChangeSlabSize,
+                  Actions::RunEventsAndTriggers,
+                  //Actions::ChangeSlabSize,
                   step_actions,
                   Parallel::Actions::ManagePhaseControl<EvolutionMetavars>,
                   Actions::AdvanceTime>>>>,
@@ -464,10 +465,10 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &domain::creators::register_derived_with_charm,
     &Parallel::register_derived_classes_with_charm<
         Event<metavariables::events>>,
-    &Parallel::register_derived_classes_with_charm<
-        StepChooser<metavariables::slab_choosers>>,
-    &Parallel::register_derived_classes_with_charm<
-        StepChooser<metavariables::step_choosers>>,
+    //&Parallel::register_derived_classes_with_charm<
+    //    StepChooser<metavariables::slab_choosers>>,
+    //&Parallel::register_derived_classes_with_charm<
+    //    StepChooser<metavariables::step_choosers>>,
     &Parallel::register_derived_classes_with_charm<StepController>,
     &Parallel::register_derived_classes_with_charm<TimeStepper>,
     &Parallel::register_derived_classes_with_charm<
