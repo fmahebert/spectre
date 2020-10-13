@@ -74,6 +74,7 @@ spectre_run_cmake() {
           -D CMAKE_BUILD_TYPE=Release \
           -D CMAKE_C_COMPILER=clang \
           -D CMAKE_CXX_COMPILER=clang++ \
+          -D DEBUG_SYMBOLS=OFF \
           -D CMAKE_Fortran_COMPILER=${GCC_HOME}/gfortran \
           "$@" \
           $SPECTRE_HOME
