@@ -215,6 +215,8 @@ CREATE_IS_CALLABLE_V(global_startup_routines)
 
 CREATE_HAS_STATIC_MEMBER_VARIABLE(LoadBalancing)
 CREATE_HAS_STATIC_MEMBER_VARIABLE_V(LoadBalancing)
+CREATE_HAS_STATIC_MEMBER_VARIABLE(Evolve)
+CREATE_HAS_STATIC_MEMBER_VARIABLE_V(Evolve)
 }  // namespace detail
 
 /*!
@@ -463,6 +465,14 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>
           return;
         } else {
           return;
+        }
+      }
+    }
+    if constexpr (detail::has_Evolve_v<PhaseType>) {
+      if (next_phase == PhaseType::Evolve) {
+        if constexpr (std::is_same_v<typename ParallelComponent::chare_type,
+                                     Algorithms::Array>) {
+          this->usesAtSync = false;
         }
       }
     }
