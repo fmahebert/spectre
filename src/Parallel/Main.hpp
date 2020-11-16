@@ -411,7 +411,7 @@ void Main<Metavariables>::
 template <typename Metavariables>
 void Main<Metavariables>::execute_next_phase() noexcept {
   if (number_of_lb_components_ != number_of_lb_components_returned_) {
-    // Parallel::printf("Load balancing not finished -- restarting QD\n");
+    Parallel::printf("Load balancing not finished -- restarting QD\n");
     CkStartQD(CkCallback(CkIndex_Main<Metavariables>::execute_next_phase(),
                          this->thisProxy));
     return;

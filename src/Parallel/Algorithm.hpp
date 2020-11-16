@@ -43,6 +43,8 @@
 
 #include "Parallel/Printf.hpp"
 
+#include "Utilities/MakeString.hpp"
+
 #include "Parallel/Main.decl.h"
 #include "Algorithms/AlgorithmArray.decl.h"
 #include "Algorithms/AlgorithmGroup.decl.h"
@@ -451,6 +453,8 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>
   // @}
 
   void ResumeFromSync() override {
+    Parallel::printf("array index %s on proc %u calls ResumeFromSync\n",
+                     MakeString{} << array_index_, Parallel::my_proc());
     (*(global_cache_->get_main_proxy())).down_lb_count();
     return;
   }
@@ -460,6 +464,8 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>
       if (next_phase == PhaseType::LoadBalancing) {
         if constexpr (std::is_same_v<typename ParallelComponent::chare_type,
                       Algorithms::Array>) {
+          Parallel::printf("array index %s on proc %u calls AtSync\n",
+                           MakeString{} << array_index_, Parallel::my_proc());
           (*(global_cache_->get_main_proxy())).up_lb_count();
           this->AtSync();
           return;
