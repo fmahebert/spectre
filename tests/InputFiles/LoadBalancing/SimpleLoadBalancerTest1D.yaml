@@ -1,0 +1,42 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SimpleLoadBalancerTest1DWithSync
+# Check: parse;execute
+#
+# Steps to reproduce
+# 1) configure cmake
+# 2) make SimpleLoadBalancerTest1DWithSync
+# 3) path/to/spectre/build/bin/SimpleLoadBalancerTest1DWithSync +p5 +balancer RotateLB --input-file path/to/spectre/tests/InputFiles/LoadBalancing/SimpleLoadBalancerTest1D.yaml
+
+TestLoadBalancing:
+  NumberOfSteps: 10000
+  ExecutionLoad: 10000
+  InternalStorageSize: 5
+  CommunicationSize: 200
+  DistributionStrategy: RoundRobin
+
+AlgorithmControlTriggers:
+  LoadBalancing:
+    EveryNStepsTrigger:
+      Period: 10
+      Offset: 0
+  GlobalSync:
+    EveryNStepsTrigger:
+      Period: 10
+      Offset: 0
+  Halt:
+    SpecifiedStepTrigger:
+      Steps: [1000]
+
+GraphDumpTrigger:
+  SpecifiedStepTrigger:
+    Steps: [1000000000]
+
+DomainCreator:
+  Interval:
+    LowerBound: [0.0]
+    UpperBound: [1.0]
+    IsPeriodicIn: [false]
+    InitialRefinement: [3]
+    InitialGridPoints: [4]
