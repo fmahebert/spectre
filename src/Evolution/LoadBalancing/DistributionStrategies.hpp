@@ -65,7 +65,7 @@ struct RoundRobin : public DistributionStrategy {
       "processors evenly without considering communication patterns or load."};
 
   WRAPPED_PUPable_decl_template(RoundRobin);  // NOLINT
-  RoundRobin() noexcept = default;
+  RoundRobin() = default;
   explicit RoundRobin(CkMigrateMessage* /*unused*/) noexcept {}
 
   std::unique_ptr<DistributionStrategy> get_clone() const noexcept override {
@@ -125,7 +125,7 @@ struct KnownEvenOptimal : public DistributionStrategy {
       "extent to which load balancing can optimize"};
 
   WRAPPED_PUPable_decl_template(KnownEvenOptimal);  // NOLINT
-  KnownEvenOptimal() noexcept = default;
+  KnownEvenOptimal() = default;
   explicit KnownEvenOptimal(CkMigrateMessage* /*unused*/) noexcept {}
 
   std::unique_ptr<DistributionStrategy> get_clone() const noexcept override {
@@ -179,7 +179,7 @@ struct KnownMaxFragmented : public DistributionStrategy {
       "extent to which load balancing can optimize"};
 
   WRAPPED_PUPable_decl_template(KnownMaxFragmented);  // NOLINT
-  KnownMaxFragmented() noexcept = default;
+  KnownMaxFragmented() = default;
   explicit KnownMaxFragmented(CkMigrateMessage* /*unused*/) noexcept {}
 
   std::unique_ptr<DistributionStrategy> get_clone() const noexcept override {
