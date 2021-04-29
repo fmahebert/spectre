@@ -9,6 +9,7 @@
 #include <boost/program_options.hpp>
 #include <charm++.h>
 #include <initializer_list>
+#include <pup.h>
 #include <string>
 #include <type_traits>
 
@@ -24,6 +25,7 @@
 #include "Parallel/Reduction.hpp"
 #include "Parallel/TypeTraits.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
+#include "Utilities/FileSystem.hpp"
 #include "Utilities/Formaline.hpp"
 #include "Utilities/Overloader.hpp"
 #include "Utilities/System/Exit.hpp"
@@ -92,6 +94,12 @@ class Main : public CBase_Main<Metavariables> {
   /// used as the callback after a quiescence detection.
   void start_load_balance() noexcept;
 
+  /// Place the Charm++ call that starts writing a checkpoint
+  ///
+  /// \details This call is wrapped within an entry method so that it may be
+  /// used as the callback after a quiescence detection.
+  void start_write_checkpoint() noexcept;
+
   /// Reduction target for data used in phase change decisions.
   ///
   /// It is required that the `Parallel::ReductionData` holds a single
@@ -103,6 +111,10 @@ class Main : public CBase_Main<Metavariables> {
           reduction_data) noexcept;
 
  private:
+  // Returns the dir name for the next Charm++ checkpoint; checks and errors if
+  // this dir already exists.
+  std::string current_checkpoint_dir() const noexcept;
+
   template <typename ParallelComponent>
   using parallel_component_options =
       Parallel::get_option_tags<typename ParallelComponent::initialization_tags,
@@ -131,6 +143,7 @@ class Main : public CBase_Main<Metavariables> {
   // Metavariables
   tuples::tagged_tuple_from_typelist<phase_change_tags_and_combines_list>
       phase_change_decision_data_;
+  size_t checkpoint_dir_counter_ = 0_st;
 };
 
 namespace detail {
@@ -348,6 +361,12 @@ Main<Metavariables>::Main(CkArgMsg* msg) noexcept {
     ERROR(e.what());
   }
 
+  // Check if first checkpoint dir is available
+  if constexpr (Algorithm_detail::has_WriteCheckpoint_v<
+                    typename Metavariables::Phase>) {
+    current_checkpoint_dir();  // to perform check if dir already exists
+  }
+
   mutable_global_cache_proxy_ = CProxy_MutableGlobalCache<Metavariables>::ckNew(
       Parallel::create_from_options<Metavariables>(
           options_, mutable_global_cache_tags{}));
@@ -488,6 +507,42 @@ void Main<Metavariables>::pup(PUP::er& p) noexcept {  // NOLINT
   // options will be held in various code objects that will themselves be
   // serialized.
   p | phase_change_decision_data_;
+
+  p | checkpoint_dir_counter_;
+  // Check if next checkpoint dir is available
+  if constexpr (Algorithm_detail::has_WriteCheckpoint_v<
+                    typename Metavariables::Phase>) {
+    if (p.isUnpacking()) {
+      current_checkpoint_dir();  // to perform check if dir already exists
+    }
+  }
+
+  // For now we only support restarts on the same hardware configuration (same
+  // number of nodes and same procs per node) used when writing the checkpoint.
+  // We check this by adding counters to the pup stream.
+  if (p.isPacking()) {
+    int current_nodes = sys::number_of_nodes();
+    int current_procs = sys::number_of_procs();
+    p | current_nodes;
+    p | current_procs;
+  } else {
+    int previous_nodes = 0;
+    int previous_procs = 0;
+    p | previous_nodes;
+    p | previous_procs;
+    if (previous_nodes != sys::number_of_nodes() or
+        previous_procs != sys::number_of_procs()) {
+      ERROR(
+          "Must restart on the same hardware configuration used when writing "
+          "the checkpoint.\n"
+          "Checkpoint written with "
+          << previous_nodes << " nodes, " << previous_procs
+          << " procs.\n"
+             "Restarted with "
+          << sys::number_of_nodes() << " nodes, " << sys::number_of_procs()
+          << " procs.");
+    }
+  }
 }
 
 template <typename Metavariables>
@@ -555,6 +610,15 @@ void Main<Metavariables>::execute_next_phase() noexcept {
       return;
     }
   }
+  if constexpr (Algorithm_detail::has_WriteCheckpoint_v<
+                    typename Metavariables::Phase>) {
+    if (current_phase_ == Metavariables::Phase::WriteCheckpoint) {
+      CkStartQD(
+          CkCallback(CkIndex_Main<Metavariables>::start_write_checkpoint(),
+                     this->thisProxy));
+      return;
+    }
+  }
 
   // The general case simply returns to execute_next_phase
   CkStartQD(CkCallback(CkIndex_Main<Metavariables>::execute_next_phase(),
@@ -566,6 +630,16 @@ void Main<Metavariables>::start_load_balance() noexcept {
   at_sync_indicator_proxy_.IndicateAtSync();
   // No need for a callback to return to execute_next_phase: this is done by
   // ResumeFromSync instead.
+}
+
+template <typename Metavariables>
+void Main<Metavariables>::start_write_checkpoint() noexcept {
+  const std::string checkpoint_dir = current_checkpoint_dir();
+  checkpoint_dir_counter_++;
+  CkStartCheckpoint(
+      checkpoint_dir.c_str(),
+      CkCallback(CkIndex_Main<Metavariables>::execute_next_phase(),
+                 this->thisProxy));
 }
 
 template <typename Metavariables>
@@ -671,6 +745,17 @@ void contribute_to_phase_change_reduction(
         "reduction.");
   }
 }
+
+template <typename Metavariables>
+std::string Main<Metavariables>::current_checkpoint_dir() const noexcept {
+  const std::string checkpoint_dir =
+      "SpectreCheckpoint" + std::to_string(checkpoint_dir_counter_);
+  if (file_system::check_if_dir_exists(checkpoint_dir)) {
+    ERROR("Checkpoint dir " + checkpoint_dir + " already exists!");
+  }
+  return checkpoint_dir;
+}
+
 /// @}
 }  // namespace Parallel
 
