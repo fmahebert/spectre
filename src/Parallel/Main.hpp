@@ -9,6 +9,7 @@
 #include <boost/program_options.hpp>
 #include <charm++.h>
 #include <initializer_list>
+#include <pup.h>
 #include <string>
 #include <type_traits>
 
@@ -24,6 +25,7 @@
 #include "Parallel/Reduction.hpp"
 #include "Parallel/TypeTraits.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
+#include "Utilities/FileSystem.hpp"
 #include "Utilities/Formaline.hpp"
 #include "Utilities/Overloader.hpp"
 #include "Utilities/System/Exit.hpp"
@@ -74,7 +76,10 @@ class Main : public CBase_Main<Metavariables> {
   /// \endcond
 
   explicit Main(CkArgMsg* msg) noexcept;
-  explicit Main(CkMigrateMessage* /*msg*/) {}
+  explicit Main(CkMigrateMessage* /*msg*/) noexcept;
+
+  // NOLINTNEXTLINE(google-runtime-references)
+  void pup(PUP::er& p) noexcept override;
 
   /// Allocate the initial elements of array components, and then execute the
   /// initialization phase on each component
@@ -82,6 +87,18 @@ class Main : public CBase_Main<Metavariables> {
 
   /// Determine the next phase of the simulation and execute it.
   void execute_next_phase() noexcept;
+
+  /// Place the Charm++ call that starts load balancing
+  ///
+  /// \details This call is wrapped within an entry method so that it may be
+  /// used as the callback after a quiescence detection.
+  void start_load_balance() noexcept;
+
+  /// Place the Charm++ call that starts writing a checkpoint
+  ///
+  /// \details This call is wrapped within an entry method so that it may be
+  /// used as the callback after a quiescence detection.
+  void start_write_checkpoint() noexcept;
 
   /// Reduction target for data used in phase change decisions.
   ///
@@ -94,6 +111,10 @@ class Main : public CBase_Main<Metavariables> {
           reduction_data) noexcept;
 
  private:
+  // Returns the dir name for the next Charm++ checkpoint; checks and errors if
+  // this dir already exists.
+  std::string current_checkpoint_dir() const noexcept;
+
   template <typename ParallelComponent>
   using parallel_component_options =
       Parallel::get_option_tags<typename ParallelComponent::initialization_tags,
@@ -108,9 +129,9 @@ class Main : public CBase_Main<Metavariables> {
       tmpl::bind<
           tmpl::type_,
           tmpl::bind<Parallel::proxy_from_parallel_component, tmpl::_1>>>;
+
   typename Metavariables::Phase current_phase_{
       Metavariables::Phase::Initialization};
-
   CProxy_MutableGlobalCache<Metavariables> mutable_global_cache_proxy_;
   CProxy_GlobalCache<Metavariables> global_cache_proxy_;
   detail::CProxy_AtSyncIndicator<Metavariables> at_sync_indicator_proxy_;
@@ -122,6 +143,7 @@ class Main : public CBase_Main<Metavariables> {
   // Metavariables
   tuples::tagged_tuple_from_typelist<phase_change_tags_and_combines_list>
       phase_change_decision_data_;
+  size_t checkpoint_dir_counter_ = 0_st;
 };
 
 namespace detail {
@@ -339,6 +361,12 @@ Main<Metavariables>::Main(CkArgMsg* msg) noexcept {
     ERROR(e.what());
   }
 
+  // Check if first checkpoint dir is available
+  if constexpr (Algorithm_detail::has_WriteCheckpoint_v<
+                    typename Metavariables::Phase>) {
+    current_checkpoint_dir();  // to perform check if dir already exists
+  }
+
   mutable_global_cache_proxy_ = CProxy_MutableGlobalCache<Metavariables>::ckNew(
       Parallel::create_from_options<Metavariables>(
           options_, mutable_global_cache_tags{}));
@@ -464,6 +492,60 @@ Main<Metavariables>::Main(CkArgMsg* msg) noexcept {
 }
 
 template <typename Metavariables>
+Main<Metavariables>::Main(CkMigrateMessage* msg) noexcept
+    : CBase_Main<Metavariables>(msg) {}
+
+template <typename Metavariables>
+void Main<Metavariables>::pup(PUP::er& p) noexcept {  // NOLINT
+  p | current_phase_;
+  p | mutable_global_cache_proxy_;
+  p | global_cache_proxy_;
+  p | at_sync_indicator_proxy_;
+  // Note: we do NOT serialize the options.
+  // This is because options are only used in the initialization phase when
+  // the executable first starts up. Thereafter, the information from the
+  // options will be held in various code objects that will themselves be
+  // serialized.
+  p | phase_change_decision_data_;
+
+  p | checkpoint_dir_counter_;
+  // Check if next checkpoint dir is available
+  if constexpr (Algorithm_detail::has_WriteCheckpoint_v<
+                    typename Metavariables::Phase>) {
+    if (p.isUnpacking()) {
+      current_checkpoint_dir();  // to perform check if dir already exists
+    }
+  }
+
+  // For now we only support restarts on the same hardware configuration (same
+  // number of nodes and same procs per node) used when writing the checkpoint.
+  // We check this by adding counters to the pup stream.
+  if (p.isPacking()) {
+    int current_nodes = sys::number_of_nodes();
+    int current_procs = sys::number_of_procs();
+    p | current_nodes;
+    p | current_procs;
+  } else {
+    int previous_nodes = 0;
+    int previous_procs = 0;
+    p | previous_nodes;
+    p | previous_procs;
+    if (previous_nodes != sys::number_of_nodes() or
+        previous_procs != sys::number_of_procs()) {
+      ERROR(
+          "Must restart on the same hardware configuration used when writing "
+          "the checkpoint.\n"
+          "Checkpoint written with "
+          << previous_nodes << " nodes, " << previous_procs
+          << " procs.\n"
+             "Restarted with "
+          << sys::number_of_nodes() << " nodes, " << sys::number_of_procs()
+          << " procs.");
+    }
+  }
+}
+
+template <typename Metavariables>
 void Main<Metavariables>::
     allocate_array_components_and_execute_initialization_phase() noexcept {
   ASSERT(current_phase_ == Metavariables::Phase::Initialization,
@@ -503,19 +585,61 @@ void Main<Metavariables>::execute_next_phase() noexcept {
     Informer::print_exit_info();
     sys::exit();
   }
-  if constexpr (Algorithm_detail::has_LoadBalancing_v<
-                    typename Metavariables::Phase>) {
-    if(current_phase_ == Metavariables::Phase::LoadBalancing) {
-      at_sync_indicator_proxy_.IndicateAtSync();
-      return;
-    }
-  }
   tmpl::for_each<component_list>([this](auto parallel_component) noexcept {
     tmpl::type_from<decltype(parallel_component)>::execute_next_phase(
         current_phase_, global_cache_proxy_);
   });
+
+  // Here we handle phases with direct Charm++ calls. By handling these phases
+  // after calling each component's execute_next_phase entry method, we ensure
+  // that each component knows what phase it is in. This is useful for pup
+  // functions that need special handling that depends on the phase.
+  //
+  // Note that in future versions of Charm++ it may become possible for pup
+  // functions to have knowledge of the migration type. At that point, it
+  // should no longer be necessary to wait until after
+  // component::execute_next_phase to make the direct charm calls. Instead, the
+  // load balance or checkpoint work could be initiated *before* the call to
+  // component::execute_next_phase and *without* the need for a quiescence
+  // detection. This may be a slight optimization.
+  if constexpr (Algorithm_detail::has_LoadBalancing_v<
+                    typename Metavariables::Phase>) {
+    if (current_phase_ == Metavariables::Phase::LoadBalancing) {
+      CkStartQD(CkCallback(CkIndex_Main<Metavariables>::start_load_balance(),
+                           this->thisProxy));
+      return;
+    }
+  }
+  if constexpr (Algorithm_detail::has_WriteCheckpoint_v<
+                    typename Metavariables::Phase>) {
+    if (current_phase_ == Metavariables::Phase::WriteCheckpoint) {
+      CkStartQD(
+          CkCallback(CkIndex_Main<Metavariables>::start_write_checkpoint(),
+                     this->thisProxy));
+      return;
+    }
+  }
+
+  // The general case simply returns to execute_next_phase
   CkStartQD(CkCallback(CkIndex_Main<Metavariables>::execute_next_phase(),
                        this->thisProxy));
+}
+
+template <typename Metavariables>
+void Main<Metavariables>::start_load_balance() noexcept {
+  at_sync_indicator_proxy_.IndicateAtSync();
+  // No need for a callback to return to execute_next_phase: this is done by
+  // ResumeFromSync instead.
+}
+
+template <typename Metavariables>
+void Main<Metavariables>::start_write_checkpoint() noexcept {
+  const std::string checkpoint_dir = current_checkpoint_dir();
+  checkpoint_dir_counter_++;
+  CkStartCheckpoint(
+      checkpoint_dir.c_str(),
+      CkCallback(CkIndex_Main<Metavariables>::execute_next_phase(),
+                 this->thisProxy));
 }
 
 template <typename Metavariables>
@@ -621,6 +745,17 @@ void contribute_to_phase_change_reduction(
         "reduction.");
   }
 }
+
+template <typename Metavariables>
+std::string Main<Metavariables>::current_checkpoint_dir() const noexcept {
+  const std::string checkpoint_dir =
+      "SpectreCheckpoint" + std::to_string(checkpoint_dir_counter_);
+  if (file_system::check_if_dir_exists(checkpoint_dir)) {
+    ERROR("Checkpoint dir " + checkpoint_dir + " already exists!");
+  }
+  return checkpoint_dir;
+}
+
 /// @}
 }  // namespace Parallel
 
