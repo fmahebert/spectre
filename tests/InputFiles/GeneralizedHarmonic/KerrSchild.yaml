@@ -16,6 +16,11 @@ Evolution:
       Order: 1
 
 PhaseChangeAndTriggers:
+  - - Slabs:
+        EvenlySpaced:
+          Interval: 4
+          Offset: 0
+    - - VisitAndReturn(WriteCheckpoint)
 
 DomainCreator:
     Shell:
@@ -101,7 +106,7 @@ EventsAndTriggers:
   : - AhA
   ? Slabs:
       Specified:
-        Values: [3]
+        Values: [8]
   : - Completion
 
 Observers:
