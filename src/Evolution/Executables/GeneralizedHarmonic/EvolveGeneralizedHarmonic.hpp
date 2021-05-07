@@ -261,6 +261,7 @@ struct EvolutionMetavars {
     InitializeTimeStepperHistory,
     Register,
     LoadBalancing,
+    WriteCheckpoint,
     Evolve,
     Exit
   };
@@ -268,6 +269,8 @@ struct EvolutionMetavars {
   static std::string phase_name(Phase phase) noexcept {
     if (phase == Phase::LoadBalancing) {
       return "LoadBalancing";
+    } else if (phase == Phase::WriteCheckpoint) {
+      return "WriteCheckpoint";
     }
     ERROR(
         "Passed phase that should not be used in input file. Integer "
@@ -275,8 +278,11 @@ struct EvolutionMetavars {
         << static_cast<int>(phase));
   }
 
-  using phase_changes = tmpl::list<PhaseControl::Registrars::VisitAndReturn<
-      EvolutionMetavars, Phase::LoadBalancing>>;
+  using phase_changes =
+      tmpl::list<PhaseControl::Registrars::VisitAndReturn<EvolutionMetavars,
+                                                          Phase::LoadBalancing>,
+                 PhaseControl::Registrars::VisitAndReturn<
+                     EvolutionMetavars, Phase::WriteCheckpoint>>;
 
   using initialize_phase_change_decision_data =
       PhaseControl::InitializePhaseChangeDecisionData<phase_changes, triggers>;
