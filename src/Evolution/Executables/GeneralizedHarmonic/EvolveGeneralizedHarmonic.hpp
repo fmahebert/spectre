@@ -371,9 +371,9 @@ struct EvolutionMetavars {
 
   template <typename ParallelComponent>
   struct registration_list {
-    using type = std::conditional_t<
-        std::is_same_v<ParallelComponent, dg_element_array>,
-      dg_registration_list, tmpl::list<>>;
+    using type =
+        std::conditional_t<std::is_same_v<ParallelComponent, dg_element_array>,
+                           dg_registration_list, tmpl::list<>>;
   };
 
   using component_list = tmpl::flatten<tmpl::list<

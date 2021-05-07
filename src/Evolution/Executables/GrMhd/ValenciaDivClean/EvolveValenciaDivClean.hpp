@@ -283,7 +283,7 @@ struct EvolutionMetavars {
 
   using dg_registration_list =
       tmpl::list<intrp::Actions::RegisterElementWithInterpolator,
-    observers::Actions::RegisterEventsWithObservers>;
+                 observers::Actions::RegisterEventsWithObservers>;
 
   using initialization_actions = tmpl::list<
       Actions::SetupDataBox,
