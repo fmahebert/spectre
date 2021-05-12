@@ -8,6 +8,7 @@
 
 #include <boost/program_options.hpp>
 #include <charm++.h>
+#include <chrono>
 #include <initializer_list>
 #include <pup.h>
 #include <string>
@@ -23,6 +24,7 @@
 #include "Parallel/PhaseControl/PhaseControlTags.hpp"
 #include "Parallel/Printf.hpp"
 #include "Parallel/Reduction.hpp"
+#include "Parallel/Tags/WallClockHoursForCheckpointAndExit.hpp"
 #include "Parallel/TypeTraits.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/FileSystem.hpp"
@@ -115,6 +117,9 @@ class Main : public CBase_Main<Metavariables> {
   // this dir already exists.
   std::string current_checkpoint_dir() const noexcept;
 
+  // Checks if it is time to write a checkpoint then exit
+  bool time_to_checkpoint_and_exit() const noexcept;
+
   template <typename ParallelComponent>
   using parallel_component_options =
       Parallel::get_option_tags<typename ParallelComponent::initialization_tags,
@@ -144,6 +149,7 @@ class Main : public CBase_Main<Metavariables> {
   tuples::tagged_tuple_from_typelist<phase_change_tags_and_combines_list>
       phase_change_decision_data_;
   size_t checkpoint_dir_counter_ = 0_st;
+  std::chrono::time_point<std::chrono::system_clock> time_at_start_{};
 };
 
 namespace detail {
@@ -209,6 +215,7 @@ void AtSyncIndicator<Metavariables>::ResumeFromSync() {
 
 template <typename Metavariables>
 Main<Metavariables>::Main(CkArgMsg* msg) noexcept {
+  time_at_start_ = std::chrono::system_clock::now();
   Informer::print_startup_info(msg);
 
   /// \todo detail::register_events_to_trace();
@@ -493,7 +500,9 @@ Main<Metavariables>::Main(CkArgMsg* msg) noexcept {
 
 template <typename Metavariables>
 Main<Metavariables>::Main(CkMigrateMessage* msg) noexcept
-    : CBase_Main<Metavariables>(msg) {}
+    : CBase_Main<Metavariables>(msg) {
+  time_at_start_ = std::chrono::system_clock::now();
+}
 
 template <typename Metavariables>
 void Main<Metavariables>::pup(PUP::er& p) noexcept {  // NOLINT
@@ -516,6 +525,8 @@ void Main<Metavariables>::pup(PUP::er& p) noexcept {  // NOLINT
       current_checkpoint_dir();  // to perform check if dir already exists
     }
   }
+  // We do not checkpoint the start time, because it's only used to measure
+  // time spent running *this call* of the executable
 
   // For now we only support restarts on the same hardware configuration (same
   // number of nodes and same procs per node) used when writing the checkpoint.
@@ -578,6 +589,22 @@ void Main<Metavariables>::
 
 template <typename Metavariables>
 void Main<Metavariables>::execute_next_phase() noexcept {
+  // This is where we go after writing to a checkpoint file *and also* after
+  // restoring from a checkpoint file. We need logic that will stop after
+  // writing but will continue after reading. Use wallclock.
+  // WARNING: this block is BEFORE we update `current_phase_` to its new value,
+  // so `current_phase_` is actually the previous phase
+  if constexpr (Algorithm_detail::has_WriteCheckpoint_v<
+                    typename Metavariables::Phase>) {
+    if (current_phase_ == Metavariables::Phase::WriteCheckpoint) {
+      if (time_to_checkpoint_and_exit()) {
+        // TODO: avoid code duplication from Exit phase
+        Informer::print_exit_info();
+        sys::exit();
+      }
+    }
+  }
+
   current_phase_ = Metavariables::determine_next_phase(
       make_not_null(&phase_change_decision_data_), current_phase_,
       global_cache_proxy_);
@@ -613,10 +640,13 @@ void Main<Metavariables>::execute_next_phase() noexcept {
   if constexpr (Algorithm_detail::has_WriteCheckpoint_v<
                     typename Metavariables::Phase>) {
     if (current_phase_ == Metavariables::Phase::WriteCheckpoint) {
-      CkStartQD(
-          CkCallback(CkIndex_Main<Metavariables>::start_write_checkpoint(),
-                     this->thisProxy));
-      return;
+      if (time_to_checkpoint_and_exit()) {
+        CkStartQD(
+            CkCallback(CkIndex_Main<Metavariables>::start_write_checkpoint(),
+                       this->thisProxy));
+        return;
+      }
+      // else: proceed to general case below
     }
   }
 
@@ -754,6 +784,20 @@ std::string Main<Metavariables>::current_checkpoint_dir() const noexcept {
     ERROR("Checkpoint dir " + checkpoint_dir + " already exists!");
   }
   return checkpoint_dir;
+}
+
+template <typename Metavariables>
+bool Main<Metavariables>::time_to_checkpoint_and_exit() const noexcept {
+  const auto now = std::chrono::system_clock::now();
+  const auto elapsed_time = now - time_at_start_;
+  const double elapsed_hours =
+      std::chrono::duration_cast<std::chrono::duration<double>>(elapsed_time)
+          .count() /
+      3600.0;
+  const double hours_to_checkpoint =
+      get<Parallel::Tags::WallClockHoursForCheckpointAndExit>(
+          *global_cache_proxy_.ckLocalBranch());
+  return elapsed_hours >= hours_to_checkpoint;
 }
 
 /// @}

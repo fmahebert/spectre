@@ -16,6 +16,28 @@ Evolution:
       Order: 1
 
 PhaseChangeAndTriggers:
+  # Here pick how frequently (in slabs) we synchronize the elements to measure
+  # the wallclock and see if it is time to write a checkpoint and exit.
+  # The more frequently we check, the sooner we will write a checkpoint after
+  # hitting the time in `WallClockHoursForCheckpointAndExit` below. But we will
+  # also waste more time waiting for the elements to synchronize.
+  #
+  # In this first cut, there are no sanity checks given to help the user. It is
+  # up to the user to specify a frequency that ensures the checkpoint is written
+  # between the `WallClockHoursForCheckpointAndExit` time and the end of the
+  # allocation. For example, with a 12 hour allocation and an 11 hour
+  # `WallClockHoursForCheckpointAndExit`, the user should make sure this will
+  # trigger AT LEAST once in 1 hour.
+  - - Slabs:
+        EvenlySpaced:
+          Interval: 3
+          Offset: 0
+    - - VisitAndReturn(WriteCheckpoint)
+
+# At each synchronization specified above, we compare the wallclock time to this
+# value. The first time we exceed this value, we checkpoint and exit.
+# For testing, checkpoint and exit after ~ 2 minutes:
+WallClockHoursForCheckpointAndExit: 0.0333
 
 DomainCreator:
   Shell:
@@ -104,7 +126,7 @@ EventsAndTriggers:
   : - AhA
   ? Slabs:
       Specified:
-        Values: [3]
+        Values: [1000]
   : - Completion
 
 Observers:

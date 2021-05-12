@@ -78,6 +78,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "Parallel/Tags/WallClockHoursForCheckpointAndExit.hpp"
 #include "ParallelAlgorithms/Actions/MutateApply.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
 #include "ParallelAlgorithms/Events/ObserveErrorNorms.hpp"
@@ -299,7 +300,8 @@ struct EvolutionMetavars {
           volume_dim, frame>,
       GeneralizedHarmonic::ConstraintDamping::Tags::DampingFunctionGamma2<
           volume_dim, frame>,
-      PhaseControl::Tags::PhaseChangeAndTriggers<phase_changes, triggers>>;
+      PhaseControl::Tags::PhaseChangeAndTriggers<phase_changes, triggers>,
+      Parallel::Tags::WallClockHoursForCheckpointAndExit>;
 
   using dg_registration_list =
       tmpl::list<intrp::Actions::RegisterElementWithInterpolator,
