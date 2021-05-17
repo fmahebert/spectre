@@ -16,6 +16,12 @@ Evolution:
       Order: 1
 
 PhaseChangeAndTriggers:
+  - - Slabs:
+       EvenlySpaced:
+         Interval: 2
+         Offset: 0
+    - - CheckpointAndExitAfterWallclock:
+          WallclockHours: 0.0166  # 1 minute
 
 DomainCreator:
   Shell:
@@ -104,7 +110,7 @@ EventsAndTriggers:
   : - AhA
   ? Slabs:
       Specified:
-        Values: [3]
+        Values: [1000]
   : - Completion
 
 Observers:
